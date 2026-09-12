@@ -14,7 +14,9 @@ bld/
 *.user
 *.userosscache
 *.sln.docstates
-*.userprefs
+*.userprefs	
+.vscode
+*.vscode
 
 ## ---------- ArcGIS Pro Add-in packaging output ----------
 *.esriAddinX
