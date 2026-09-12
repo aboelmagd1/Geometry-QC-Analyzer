@@ -18,6 +18,7 @@ bld/
 
 ## ---------- ArcGIS Pro Add-in packaging output ----------
 *.esriAddinX
+!GeometryQCAddIn.esriAddinX
 Install/
 
 ## ---------- NuGet ----------
