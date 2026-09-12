@@ -1,0 +1,56 @@
+## ---------- .NET / Visual Studio build outputs ----------
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+bld/
+
+## ---------- Visual Studio user-specific & IDE files ----------
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+## ---------- ArcGIS Pro Add-in packaging output ----------
+*.esriAddinX
+Install/
+
+## ---------- NuGet ----------
+packages/
+*.nupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## ---------- Local/personal config & machine-specific paths ----------
+*.local.config
+*.local.json
+appsettings.Development.json
+appsettings.*.local.json
+*.env
+.env.local
+**/LocalConfig/
+
+## ---------- ArcGIS Pro project & lock files ----------
+*.aprx.lock
+*.gdb/*.lock
+*.sr.lock
+*.ddx
+*.tbx.lock
+BackupFiles/
+
+## ---------- Logs & temp/test data ----------
+*.log
+logs/
+TestResults/
+*.tmp
+*.temp
+
+## ---------- OS junk ----------
+Thumbs.db
+.DS_Store

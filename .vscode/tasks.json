@@ -1,0 +1,63 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build AddIn (dotnet build)",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/GeometryQCAddIn.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "problemMatcher": "$msCompile",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Clean AddIn (dotnet clean)",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "clean",
+                "${workspaceFolder}/GeometryQCAddIn.csproj"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Package AddIn (.esriAddinX)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/package.ps1"
+            ],
+            "group": {
+                "kind": "build"
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Launch ArcGIS Pro",
+            "type": "process",
+            "command": "C:\\Program Files\\ArcGIS\\Pro\\bin\\ArcGISPro.exe",
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "Kill ArcGIS Pro Process",
+            "type": "shell",
+            "command": "powershell -Command \"Stop-Process -Name ArcGISPro -Force -ErrorAction SilentlyContinue; Write-Host 'ArcGIS Pro process stopped.'\"",
+            "problemMatcher": []
+        }
+    ]
+}

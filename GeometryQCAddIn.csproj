@@ -1,0 +1,86 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Platforms>x64;AnyCPU</Platforms>
+    <Configurations>Debug;Release</Configurations>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <RootNamespace>GeometryQCAddIn</RootNamespace>
+    <AssemblyName>GeometryQCAddIn</AssemblyName>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <NoWarn>1591;1701;1702;CA1416</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <ArcGISProDir>C:\Program Files\ArcGIS\Pro\bin</ArcGISProDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="ArcGIS.Core">
+      <HintPath>$(ArcGISProDir)\ArcGIS.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="ArcGIS.Desktop.Framework">
+      <HintPath>$(ArcGISProDir)\ArcGIS.Desktop.Framework.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="ArcGIS.Desktop.Core">
+      <HintPath>$(ArcGISProDir)\Extensions\Core\ArcGIS.Desktop.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="ArcGIS.Desktop.Mapping">
+      <HintPath>$(ArcGISProDir)\Extensions\Mapping\ArcGIS.Desktop.Mapping.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="ArcGIS.Desktop.Extensions">
+      <HintPath>$(ArcGISProDir)\Extensions\DesktopExtensions\ArcGIS.Desktop.Extensions.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="ArcGIS.Desktop.Shared.Wpf">
+      <HintPath>$(ArcGISProDir)\ArcGIS.Desktop.Shared.Wpf.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="ArcGIS.Desktop.Resources">
+      <HintPath>$(ArcGISProDir)\ArcGIS.Desktop.Resources.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Config.daml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Images\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <Target Name="PackageArcGISProAddIn" AfterTargets="Build">
+    <PropertyGroup>
+      <AddInDir>$(TargetDir)AddInStaging</AddInDir>
+      <AddInPackage>$(TargetDir)GeometryQCAddIn.esriAddinX</AddInPackage>
+    </PropertyGroup>
+    
+    <MakeDir Directories="$(AddInDir)\Install" />
+    <Copy SourceFiles="$(TargetDir)GeometryQCAddIn.dll" DestinationFolder="$(AddInDir)\Install" />
+    <Copy SourceFiles="$(TargetDir)GeometryQCAddIn.pdb" DestinationFolder="$(AddInDir)\Install" Condition="Exists('$(TargetDir)GeometryQCAddIn.pdb')" />
+    <Copy SourceFiles="$(TargetDir)GeometryQCAddIn.deps.json" DestinationFolder="$(AddInDir)\Install" Condition="Exists('$(TargetDir)GeometryQCAddIn.deps.json')" />
+    <Copy SourceFiles="$(ProjectDir)Config.daml" DestinationFolder="$(AddInDir)" />
+    
+    <ItemGroup>
+      <AddinImages Include="$(ProjectDir)Images\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(AddinImages)" DestinationFolder="$(AddInDir)\Images\%(RecursiveDir)" Condition="'@(AddinImages)' != ''" />
+
+    <ZipDirectory SourceDirectory="$(AddInDir)" DestinationFile="$(AddInPackage)" Overwrite="true" />
+    <RemoveDir Directories="$(AddInDir)" />
+    <Copy SourceFiles="$(AddInPackage)" DestinationFolder="$(ProjectDir)" />
+    
+    <Message Text="[SUCCESS] ArcGIS Pro Add-in Package created: $(AddInPackage)" Importance="high" />
+    <Message Text="[SUCCESS] Copied to project root: $(ProjectDir)GeometryQCAddIn.esriAddinX" Importance="high" />
+  </Target>
+
+</Project>
