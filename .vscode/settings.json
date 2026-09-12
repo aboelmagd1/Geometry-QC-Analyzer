@@ -1,9 +1,0 @@
-{
-    "dotnet.defaultSolution": "GeometryQCAddIn.csproj",
-    "omnisharp.enableRoslynAnalyzers": true,
-    "csharp.format.enable": true,
-    "files.associations": {
-        "*.daml": "xml",
-        "*.xaml": "xml"
-    }
-}
