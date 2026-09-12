@@ -1,4 +1,89 @@
-## ---------- .NET / Visual Studio build outputs ----------
+## ==========================================================
+## Geometry QC Analyzer - Comprehensive .gitignore
+## Ensures full privacy, security, and clean repository state
+## ==========================================================
+
+## ---------- Personal Screen Recordings & Media ----------
+[Vv]ideo/
+[Vv]ideos/
+[Rr]ecording/
+[Rr]ecordings/
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wmv
+*.webm
+*.wav
+*.mp3
+
+## ---------- Personal GIS Data, Projects & Databases ----------
+*.aprx
+*.aprx.lock
+*.ppkx
+*.mpkx
+*.gdb/
+*.gdb
+*.geodatabase/
+*.geodatabase
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.sbn
+*.sbx
+*.mxd
+*.sde
+*.kml
+*.kmz
+*.geojson
+*.dwg
+*.dxf
+*.las
+*.laz
+*.tif
+*.tiff
+*.img
+*.sid
+*.csv
+*.xlsx
+*.xls
+
+## ---------- Environment, Secrets & Local Credentials ----------
+*.env
+*.env.*
+.env
+.env.*
+.env.local
+secrets.json
+appsettings.Development.json
+appsettings.*.local.json
+*.local.config
+*.local.json
+**/LocalConfig/
+*.key
+*.pem
+*.pfx
+*.cer
+*.p12
+*.credentials
+credentials.json
+
+## ---------- IDE, User-Specific & Editor State ----------
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userprefs
+*.userosscache
+*.sln.docstates
+.agents/
+.cursor/
+.gemini/
+
+## ---------- .NET / Visual Studio Build Outputs ----------
 [Bb]in/
 [Oo]bj/
 [Dd]ebug/
@@ -7,58 +92,44 @@ x64/
 x86/
 build/
 bld/
-
-## ---------- Visual Studio user-specific & IDE files ----------
-.vs/
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-*.userprefs
-.vscode/
-
-## ---------- ArcGIS Pro Add-in packaging output ----------
-*.esriAddinX
-!GeometryQCAddIn.esriAddinX
+AddInStaging/
 Install/
 
-## ---------- NuGet ----------
+## ---------- NuGet Packages & Dependencies ----------
 packages/
 *.nupkg
 project.lock.json
 project.fragment.lock.json
 artifacts/
 
-## ---------- Local/personal config & machine-specific paths ----------
-*.local.config
-*.local.json
-appsettings.Development.json
-appsettings.*.local.json
-*.env
-.env.local
-**/LocalConfig/
-
-## ---------- ArcGIS Pro project & lock files ----------
-*.aprx.lock
-*.gdb/*.lock
+## ---------- ArcGIS Pro Add-in Output ----------
+# Ignore generated package in root; track release package in Add-in/
+/GeometryQCAddIn.esriAddinX
+BackupFiles/
 *.sr.lock
 *.ddx
 *.tbx.lock
-BackupFiles/
 
 ## ---------- Archives & Backups ----------
 *.zip
 *.tar.gz
 *.rar
 *.7z
+*.bak
+*.backup
 
-## ---------- Logs & temp/test data ----------
+## ---------- Logs, Dumps & Temp Files ----------
 *.log
 logs/
 TestResults/
 *.tmp
 *.temp
+*.dmp
+*.dump
+*.crash
 
-## ---------- OS junk ----------
+## ---------- OS System Files ----------
 Thumbs.db
+desktop.ini
 .DS_Store
+$RECYCLE.BIN/

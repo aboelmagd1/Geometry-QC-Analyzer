@@ -1,4 +1,15 @@
-# Prompt: Build the "ArcGIS Pro Geometry QC Analyzer" Add-In from Scratch
+# AI Rebuild Prompt: ArcGIS Pro Geometry QC Analyzer
+# برومت إعادة بناء أداة فحص الجودة الهندسية باستخدام الذكاء الاصطناعي
+
+<p align="center">
+  <a href="#english-rebuild-prompt">English Rebuild Prompt</a> •
+  <a href="#برومت-إعادة-البناء-باللغة-العربية">برومت إعادة البناء باللغة العربية</a>
+</p>
+
+---
+
+<a name="english-rebuild-prompt"></a>
+# English Rebuild Prompt
 
 > **Prompt Instructions for AI**: Use the specifications, architectural details, and step-by-step requirements below to generate the complete C# / WPF source code, project files, and DAML configuration for an enterprise-grade ArcGIS Pro Add-In from scratch.
 
@@ -12,7 +23,7 @@ The **Geometry QC Analyzer** is a high-performance, read-only polygon Quality Co
 The Add-in inspects selected polygon features (or features in the active map extent) to detect geometric topology violations, digitizing artifacts, and spatial inconsistencies without modifying underlying geodatabase records.
 
 ### 2. Problem It Solves
-Manual topological inspection in GIS cadastral, parcel, and zoning datasets is slow and error-prone. Standard topology tools often require enterprise geodatabase schemas and write permissions. This Add-in provides instant, in-memory validation of 10 discrete geometric checks directly from the ribbon with visual map overlays and interactive zoom navigation.
+Manual topological inspection in GIS cadastral, parcel, and zoning datasets is slow and error-prone. Standard topology tools often require enterprise geodatabase schemas and write permissions. This Add-in provides instant, in-memory validation of 10 discrete geometric checks directly from the ribbon with visual map overlays and interactive zoom navigation. It also works seamlessly on live Feature Services without exporting to local geodatabases.
 
 ### 3. Target User
 GIS Analysts, Cadastral Surveyors, Cartographers, and Spatial Data Quality Engineers working within ArcGIS Pro (supporting both Light and Dark themes).
@@ -142,7 +153,7 @@ Implement 10 distinct, configurable checks inheriting from `IGeometryCheck`:
    - Per-Pair Exception Isolation: Wraps each candidate pair in `try/catch` to prevent a single corrupt geometry from aborting the entire overlap check.
    - Computes spatial intersection: `GeometryEngine.Instance.Intersection(polyA, polyB)`.
    - Multi-Part Decomposition: If two polygons overlap in multiple distinct areas, decomposes them via `GeometryEngine.Instance.MultipartToSinglePart(overlapPoly)` so each overlap patch is independently reported, measured, and zoomable.
-   - Shared Boundary Sliver Guard: Filters out microscopic slivers caused by floating-point rounding along shared edges (where width and height are below spatial reference tolerance `sr.XYTolerance`).
+   - Shared Boundary Sliver Guard: Filters out microscopic slivers caused by floating-point rounding along shared edges.
    - Duplicate Prioritization: Skips identical duplicate geometries when `CheckDuplicates` is enabled, avoiding double-reporting.
    - Human-Readable Area: Formats overlap area using `UnitConverter.FormatArea` (`m²`, `cm²`, `ha`).
 
@@ -173,21 +184,23 @@ Implement 10 distinct, configurable checks inheriting from `IGeometryCheck`:
 
 8. **Check 8: Snap Issues (`SnapIssueCheck`)**
    - Uses `VertexIndex` spatial radius search around each vertex.
-   - Minimum Distance Threshold: Excludes vertex pairs separated by less than the spatial reference resolution ($\le \max(\text{sr.XYTolerance}, 0.5\text{ mm})$); vertices within tolerance are cleanly coincident and snapped, NOT snap errors.
-   - Closed-Ring Coordinate Normalization: Normalizes reporting keys by rounded coordinates so the closing vertex of a closed ring cannot trigger duplicate snap issues.
+   - Sub-Millimeter Detection: Any separation greater than machine resolution ($> \text{sr.XYResolution}$) within the tolerance is recognized as an unsnapped gap.
+   - Unit Precision: Formats distances under 1 cm in millimeters (`mm`) with up to 3–4 decimals (e.g. `0.04 mm`), eliminating misleading `0.00 cm` reports.
+   - Deduplicates symmetric pairs and normalizes closed ring endpoints.
    - Flags non-coincident pairs where $\text{minDistance} < \text{distance} \le \text{SnapToleranceCm}$ (default `1.0` cm).
 
 9. **Check 9: Redundant / Collinear Vertices (`RedundantVertexCheck`)**
    - Identifies unnecessary vertices situated on an almost straight line between their adjacent neighbors:
      $$\text{StraightAngle} = 180^\circ - \text{DeflectionAngle} \ge \text{RedundantVertexAngleDegrees} \quad (\text{default } 179.9^\circ)$$
    - **Topological Junction Vertex Guard (`IsJunctionVertex`):**
-     Before flagging a collinear vertex as redundant, the check inspects `context.VertexIndex` and `context.SpatialIndex`. If another feature shares a vertex at that point (coincident node) or if an adjacent feature's boundary touches/terminates at that vertex (T-junction), the vertex is recognized as a **Topological Junction Vertex** and is **preserved** (NOT reported as an error).
+     Inspects touching features. If an adjacent feature meets at this point with a true corner/bend ($< \text{thresholdDeg}$), the vertex is protected as a valid junction.
+     **Critical Rule:** If two coincident vertices on adjacent features both approach 180°, neither is a junction — **both are flagged as redundant collinear vertex errors!**
 
 10. **Check 10: Missing Junction Vertices (`JunctionVertexCheck`)**
     - Detects T-junctions: where a vertex $V$ of Polygon A lies within $\le \text{MissingJunctionToleranceCm}$ (default `1.0` cm) of an edge segment $(P_1, P_2)$ of Polygon B, but Polygon B lacks a coincident vertex.
     - Endpoint Coincidence Guard: Skips vertices that are within tolerance of segment endpoints $P_1$ or $P_2$ (already snapped).
     - Closing Vertex Guard: Skips polygon closing vertex duplicate index.
-    - Symmetric Key Deduplication: Normalizes pair reporting keys `min(OidA, OidB)_max(OidA, OidB)` to prevent duplicate reciprocal reports.
+    - Multi-touch Deduplication: Consolidates multiple adjacent features touching the same T-junction location into a single issue report on the target feature lacking the node.
 
 ---
 
@@ -196,7 +209,7 @@ All raw issues emitted by checks pass through a centralized pipeline (`Deduplica
 1. **Existence Verification:** Validates that issue locations have finite, non-NaN coordinates and that `IssueGeometry` is not empty.
 2. **Duplicate/Overlap Disambiguation:** When two features are 100% coincident duplicates, `Duplicate Geometry` takes precedence and redundant `Overlap` issues for that pair are suppressed.
 3. **Pairwise Symmetric Normalization:** For pairwise issues (Overlap, Duplicate, Snap, Junction), feature IDs are normalized (`min(OidA, OidB), max(OidA, OidB)`), eliminating duplicate reciprocal reports (A→B and B→A).
-4. **Millimeter Spatial Deduplication:** Coordinates are rounded to millimeter precision (`Math.Round(coord, 3)`), discarding repeated issues emitted at the exact same physical location.
+4. **Millimeter Spatial Deduplication:** Coordinates are rounded to millimeter precision, discarding repeated issues emitted at the exact same physical location.
 
 ---
 
@@ -248,27 +261,7 @@ Docked on the right side:
 
 ---
 
-## F. Internal Processing Logic & Mathematical Formulas
-
-### 1. Coordinate & Unit Conversion (`UnitConverter.cs`)
-* Linear conversion: `CentimetersToMapUnits`, `MetersToMapUnits`, `MapUnitsToCentimeters`, `FormatLinearDistance`.
-* Area conversion: `SqMetersToMapUnitsSq`, `MapUnitsToSqMeters`, `FormatArea` (converting map units squared to `cm²`, `m²`, `ha` with sample location latitude adjustment).
-
-### 2. Spatial Grid Indexing (`SpatialIndex.cs` & `VertexIndex.cs`)
-* Uses 64-bit coordinate packing bijection:
-  $$\text{Hash}(X, Y) = ((\text{long})(\text{uint})X \ll 32) \mid (\text{uint})Y$$
-  Guarantees zero hash collisions across all positive and negative coordinate grids.
-
-### 3. Collinear Vertex Angle Formula (`RedundantVertexCheck.cs`)
-For vertex $P_i$ between $P_{i-1}$ and $P_{i+1}$:
-$$\vec{u} = P_i - P_{i-1}, \quad \vec{v} = P_{i+1} - P_i$$
-$$\cos \phi = \frac{\vec{u} \cdot \vec{v}}{\|\vec{u}\| \|\vec{v}\|}$$
-$$\text{StraightAngle} = 180^\circ - \arccos(\text{clamp}(\cos \phi, -1, 1)) \times \frac{180}{\pi}$$
-If $\text{StraightAngle} \ge \text{Threshold}$ and $\text{IsJunctionVertex} == \text{false}$, vertex $P_i$ is flagged.
-
----
-
-## G. Additional Implementation Constraints & Rules
+## F. Implementation Constraints & Rules
 
 1. **ArcGIS Pro Packaging Target:**
    In `GeometryQCAddIn.csproj`, the packaging post-build target **must** place assemblies in `Install/` and copy the finished package to the project root directory for immediate user deployment.
@@ -280,3 +273,66 @@ If $\text{StraightAngle} \ge \text{Threshold}$ and $\text{IsJunctionVertex} == \
    The Add-in must **never** start an edit operation or modify geodatabase tables. All geometry evaluations and overlays are strictly read-only and in-memory.
 5. **Ribbon Tab Isolation Rule (`appearsOnAddInTab="false"`):**
    In `Config.daml`, ribbon `<group>` elements intended exclusively for the custom tab must set `appearsOnAddInTab="false"` to prevent duplication in the generic "Add-Ins" tab.
+
+---
+
+<a name="برومت-إعادة-البناء-باللغة-العربية"></a>
+# برومت إعادة البناء باللغة العربية (Arabic Rebuild Prompt)
+
+> **تعليمات للذكاء الاصطناعي (AI Prompt)**: استخدم المواصفات والمعايير المعمارية والبرمجية المذكورة أدناه لتوليد الكود المصدري الكامل بلغة C# وواجهات WPF وملفات المشروع وإعدادات DAML لإنشاء إضافة ArcGIS Pro Add-In احترافية من الصفر.
+
+---
+
+## أ. نظرة عامة على المشروع
+
+إضافة **Geometry QC Analyzer** هي أداة تدقيق وفحص جودة مكانية وطوبولوجية لطبقات المضلعات في برنامج **ArcGIS Pro 3.x**، تعتمد كلياً على القراءة فقط (`Read-Only`) وتعمل في الذاكرة بأداء فائق.
+
+### 1. الغرض من الأداة
+فحص مضلعات المعالم المحددة (أو في نطاق الخريطة الحالي) لاكتشاف العيوب الطوبولوجية وعيوب الرسم الرقمي دون إجراء أي تعديل على قاعدة البيانات الأصلية ودون الحاجة لبناء Geodatabase Topology.
+
+### 2. المشكلة التي تعالجها
+الفحص الطوبولوجي التقليدي في قواعد البيانات الجغرافية يتطلب إعدادات معقدة وبناء طوبولوجيا وقوانين تفصيلية، وإذا كانت البيانات على Feature Service فيلزم تصديرها. توفر هذه الإضافة فحصاً فورياً لـ 10 عيوب هندسية أساسية من شريط الأدوات مباشرة مع توجيه بصري وتكبير فوري.
+
+---
+
+## ب. المتطلبات التقنية الأساسية
+
+* **لغة البرمجة:** C# (الإصدار 12.0 / `latest` مع تفعيل `nullable reference types`).
+* **إطار العمل المستهدف:** `.NET 8.0-windows` لمعمارية Windows x64.
+* **واجهة المستخدم:** Windows Presentation Foundation (WPF) بنمط ArcGIS Pro الأصلي.
+* **بيئة التشغيل:** ArcGIS Pro 3.0 فما فوق (تم الاختبار على ArcGIS Pro 3.4.x).
+* **حزمة المخرجات:** ملف `.esriAddinX`، وتوضع جميع المكتبات داخل مجلد داخلي باسم `Install/`.
+
+---
+
+## ج. الفحوصات الهندسية العشرة المطلوبة (The 10 Checks)
+
+1. **Invalid Geometry (`CHK_INVALID_GEOM`):** كشف المضلعات غير الصحيحة ذاتياً والتقاطعات الذاتية والحلقات المعكوسة والإحداثيات غير المعرفة.
+2. **Overlap (`CHK_OVERLAP`):** كشف المساحات المتداخلة بين المضلعات وتقسيم التداخلات المتعددة وعرض مساحتها بدقة (`m²` أو `cm²`).
+3. **Duplicate Geometry (`CHK_DUPLICATE`):** كشف المضلعات المتطابقة هندسياً بنسبة 100% ومنع تكرارها كـ Overlap.
+4. **Enclosed Gap (`CHK_GAP`):** كشف الفجوات والثقوب الهوائية المغلقة والمحصورة تماماً بين المضلعات المتجاورة.
+5. **Multi-Part Feature (`CHK_MULTIPART`):** اكتشاف المعالم التي تتكون من أكثر من مضلع منفصل (PartCount > 1).
+6. **Short Segment (`CHK_SHORT_SEG`):** اكتشاف الأضلاع متناهية الصغر الأقل من التفاوت المسموح (افتراضياً 10 سم).
+7. **Angle Issue (`CHK_ANGLE`):** اكتشاف الزوايا الحادة والشاذة جداً (Spikes) الناتجة عن أخطاء النقر بالماوس.
+8. **Snap Issue (`CHK_SNAP`):** كشف الرؤوس المتقاربة غير الملتقطة. تُقاس المسافات الأقل من سنتيمتر بوحدة الملليمتر (`mm`) بدقة حتى 3 و4 خانات عشرية (مثل `0.04 mm`) لمنع رسائل `0.00 cm`.
+9. **Redundant Vertex (`CHK_REDUNDANT`):** كشف الرؤوس الزائدة على خط مستقيم (180°). إذا وُجد رأسان متطابقان على حد مضلعين وكلاهما زاويته تقترب من 180°، يُعتبران خطأ رأس زائد على كلا المضلعين. أما إذا كان للمضلع الآخر زاوية انكسار حقيقية (< 180°) فتُحمى النقطة كنقطة ربط طوبولوجية.
+10. **Missing Junction (`CHK_JUNCTION`):** كشف العقد التبادلية المفقودة في الوصلات على شكل T-Junction عندما يلامس رأس مضلع ضلع مضلع مجاور دون وجود رأس مشترك.
+
+---
+
+## د. واجهة المستخدم والتصميم
+
+1. **شريط الأدوات (Ribbon Tab):**
+   - تبويب مستقل مخصص باسم `Geometry QC`.
+   - أزرار التحكم: `Enable QC`, `Run QC`, `Clear Results`, `Cancel`, `Results`, `Settings`.
+2. **لوحة النتائج (Results DockPane):**
+   - محدد الطبقة المستهدفة (Target Layer Selector) مع زر التحديث السريع `↻`.
+   - شجرة مصنفة للأخطاء مع زر `Zoom` للانتقال الفوري وتكبير الخطأ على الخريطة.
+   - لوحة تفاصيل تعرض القياس الدقيق للمشكلة.
+3. **لوحة الإعدادات (Settings DockPane):**
+   - التحكم في حساسية وتفاوتات الفحوصات الـ 10 واختيار طريقة جلب البيانات (Display Cache أو Live Query).
+4. **دعم المظهر الفاتح والداكن (Light & Dark Themes):**
+   - ألوان مخصصة بتدرجات الكحلي والتركواز تتكيف تلقائياً مع إعدادات ArcGIS Pro.
+
+---
+*تم إعداد هذا البرومت لبناء وتطوير إضافة Geometry QC Analyzer بالكامل.*
