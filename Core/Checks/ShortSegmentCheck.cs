@@ -47,9 +47,11 @@ namespace GeometryQCAddIn.Core.Checks
                         double dy = p2.Y - p1.Y;
                         double segLength = Math.Sqrt(dx * dx + dy * dy);
 
-                        if (segLength > 0 && segLength < thresholdMapUnits)
+                        double minSegmentLength = Math.Max(sr?.XYTolerance ?? 0.0005, 1e-4);
+                        if (segLength > minSegmentLength && segLength < thresholdMapUnits)
                         {
                             var (val, unit) = UnitConverter.FormatLinearDistance(segLength, sr, p1);
+                            if (val <= 0) continue;
                             var midX = (p1.X + p2.X) / 2.0;
                             var midY = (p1.Y + p2.Y) / 2.0;
                             var midPoint = MapPointBuilderEx.CreateMapPoint(midX, midY, sr);

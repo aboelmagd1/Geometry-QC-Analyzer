@@ -7,7 +7,9 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using ArcGIS.Desktop.Framework;
 using ArcGIS.Desktop.Framework.Contracts;
+using ArcGIS.Desktop.Framework.Threading.Tasks;
 using ArcGIS.Desktop.Mapping;
+using ArcGIS.Desktop.Mapping.Events;
 using GeometryQCAddIn.Config;
 using GeometryQCAddIn.Core;
 using GeometryQCAddIn.Graphics;
@@ -36,6 +38,20 @@ namespace GeometryQCAddIn.UI
         private readonly GeometryValidator _validator = new GeometryValidator();
         private readonly ProgressService _progressService = new ProgressService();
         private CancellationTokenSource? _cts;
+
+        private ObservableCollection<MapLayerItem> _availableLayers = new ObservableCollection<MapLayerItem> { MapLayerItem.AllPolygonLayers };
+        public ObservableCollection<MapLayerItem> AvailableLayers
+        {
+            get => _availableLayers;
+            set => SetProperty(ref _availableLayers, value);
+        }
+
+        private MapLayerItem? _selectedLayer;
+        public MapLayerItem? SelectedLayer
+        {
+            get => _selectedLayer;
+            set => SetProperty(ref _selectedLayer, value);
+        }
 
         private ObservableCollection<IssueGroupViewModel> _issueGroups = new ObservableCollection<IssueGroupViewModel>();
         public ObservableCollection<IssueGroupViewModel> IssueGroups
@@ -96,13 +112,17 @@ namespace GeometryQCAddIn.UI
         public ICommand ClearResultsCommand { get; }
         public ICommand CancelCommand { get; }
         public ICommand ZoomToIssueCommand { get; }
+        public ICommand RefreshLayersCommand { get; }
 
         public ResultsDockPaneViewModel()
         {
             ThemeService.Initialize();
+            _selectedLayer = _availableLayers[0];
+
             RunQCCommand = new RelayCommand(async () => await RunValidationAsync(), () => !IsBusy);
             ClearResultsCommand = new RelayCommand(ClearResults);
             CancelCommand = new RelayCommand(CancelExecution, () => IsBusy);
+            RefreshLayersCommand = new RelayCommand(async () => await RefreshLayersAsync());
             ZoomToIssueCommand = new RelayCommand(async (param) =>
             {
                 if (param is IssueResult issue)
@@ -119,14 +139,80 @@ namespace GeometryQCAddIn.UI
                     StatusText = status;
                 }
             };
+
+            ActiveMapViewChangedEvent.Subscribe((args) =>
+            {
+                _ = RefreshLayersAsync();
+            });
+
+            _ = RefreshLayersAsync();
+        }
+
+        protected override void OnShow(bool isVisible)
+        {
+            base.OnShow(isVisible);
+            if (isVisible)
+            {
+                _ = RefreshLayersAsync();
+            }
         }
 
         public static void Show()
         {
             var pane = FrameworkApplication.DockPaneManager.Find(DockPaneId);
-            if (pane != null)
+            if (pane is ResultsDockPaneViewModel vm)
+            {
+                vm.Activate();
+                _ = vm.RefreshLayersAsync();
+            }
+            else if (pane != null)
             {
                 pane.Activate();
+            }
+        }
+
+        public async Task RefreshLayersAsync()
+        {
+            var layersList = new List<MapLayerItem> { MapLayerItem.AllPolygonLayers };
+
+            await QueuedTask.Run(() =>
+            {
+                var mapView = MapView.Active;
+                if (mapView == null || mapView.Map == null) return;
+
+                var allLayers = mapView.Map.GetLayersAsFlattenedList();
+                foreach (var layer in allLayers)
+                {
+                    if (layer is FeatureLayer fl)
+                    {
+                        try
+                        {
+                            if (fl.ShapeType == ArcGIS.Core.CIM.esriGeometryType.esriGeometryPolygon)
+                            {
+                                layersList.Add(new MapLayerItem(fl.Name, fl.URI ?? fl.Name));
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            LoggingService.DebugLog($"Layer check skipped for '{fl?.Name}': {ex.Message}");
+                        }
+                    }
+                }
+            });
+
+            string? previousUri = SelectedLayer?.Uri;
+            bool previousWasAll = SelectedLayer == null || SelectedLayer.IsAll;
+
+            AvailableLayers = new ObservableCollection<MapLayerItem>(layersList);
+
+            if (previousWasAll)
+            {
+                SelectedLayer = AvailableLayers[0];
+            }
+            else
+            {
+                var matched = AvailableLayers.FirstOrDefault(l => l.Uri == previousUri);
+                SelectedLayer = matched ?? AvailableLayers[0];
             }
         }
 
@@ -154,7 +240,8 @@ namespace GeometryQCAddIn.UI
 
             try
             {
-                var result = await _validator.RunValidationAsync(mapView, settings, _progressService, _cts.Token);
+                string? targetLayerUri = (SelectedLayer == null || SelectedLayer.IsAll) ? null : SelectedLayer.Uri;
+                var result = await _validator.RunValidationAsync(mapView, settings, targetLayerUri, _progressService, _cts.Token);
 
                 var groups = result.Issues
                     .GroupBy(i => i.IssueType)

@@ -65,7 +65,7 @@ namespace GeometryQCAddIn.Config
 
         // 10. Missing Junction Vertices
         public bool CheckMissingJunctions { get; set; } = true;
-        public double MissingJunctionToleranceCm { get; set; } = 1.0; // 1 cm default
+        public double MissingJunctionToleranceCm { get; set; } = 10.0; // 10 cm default (CAD/GIS parcel cadastre standard)
 
         private static readonly string SettingsFilePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -85,6 +85,12 @@ namespace GeometryQCAddIn.Config
                     var settings = JsonSerializer.Deserialize<GeometryQCSettings>(json);
                     if (settings != null)
                     {
+                        // Self-healing clamp: if tolerance was accidentally set below 1.0 cm (e.g. 0.1 cm = 1 mm), restore to 10.0 cm
+                        if (settings.MissingJunctionToleranceCm < 1.0)
+                        {
+                            settings.MissingJunctionToleranceCm = 10.0;
+                            settings.Save();
+                        }
                         return settings;
                     }
                 }

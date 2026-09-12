@@ -51,6 +51,7 @@ namespace GeometryQCAddIn.Core
         public async Task<ValidationRunResult> RunValidationAsync(
             MapView mapView,
             GeometryQCSettings settings,
+            string? targetLayerUri,
             ProgressService? progressService,
             CancellationToken cancellationToken)
         {
@@ -58,7 +59,7 @@ namespace GeometryQCAddIn.Core
             var stats = result.Statistics;
             stats.StartTime = DateTime.Now;
 
-            LoggingService.Info($"QC Run initiated. Data Source Mode: {settings.DataSource}");
+            LoggingService.Info($"QC Run initiated. Data Source Mode: {settings.DataSource}, Target Layer: {targetLayerUri ?? "<All>"}");
 
             if (mapView == null || mapView.Map == null)
             {
@@ -77,7 +78,7 @@ namespace GeometryQCAddIn.Core
                     ? new LiveQueryProvider()
                     : new DisplayCacheProvider();
 
-                var acqResult = await provider.AcquireFeaturesAsync(mapView, settings, cancellationToken);
+                var acqResult = await provider.AcquireFeaturesAsync(mapView, settings, targetLayerUri, cancellationToken);
                 swAcquisition.Stop();
                 stats.GeometryAcquisitionTime = swAcquisition.Elapsed;
 
@@ -131,6 +132,7 @@ namespace GeometryQCAddIn.Core
                 var swChecks = Stopwatch.StartNew();
                 var enabledChecks = _allChecks.Where(c => c.IsEnabled(settings)).ToList();
                 int totalChecks = enabledChecks.Count;
+                var rawIssues = new List<IssueResult>();
 
                 for (int i = 0; i < totalChecks; i++)
                 {
@@ -146,10 +148,9 @@ namespace GeometryQCAddIn.Core
                         swSingleCheck.Stop();
 
                         stats.CheckDurations[check.Name] = swSingleCheck.Elapsed;
-                        stats.IncrementIssueCount(check.Name, issues.Count);
-                        result.Issues.AddRange(issues);
+                        rawIssues.AddRange(issues);
 
-                        LoggingService.Info($"Check '{check.Name}' completed: {issues.Count} issues found in {swSingleCheck.ElapsedMilliseconds} ms.");
+                        LoggingService.Info($"Check '{check.Name}' completed: {issues.Count} raw issues found in {swSingleCheck.ElapsedMilliseconds} ms.");
                     }
                     catch (OperationCanceledException)
                     {
@@ -166,9 +167,21 @@ namespace GeometryQCAddIn.Core
 
                 swChecks.Stop();
                 stats.CheckExecutionTime = swChecks.Elapsed;
+
+                // Step 4: Verification & Deduplication Pipeline
+                progressService?.Report(95.0, "Verifying issues and removing duplicates...");
+                var verifiedIssues = DeduplicateAndVerifyIssues(rawIssues, context);
+                result.Issues.AddRange(verifiedIssues);
+
+                // Update category statistics with verified counts
+                foreach (var issue in verifiedIssues)
+                {
+                    stats.IncrementIssueCount(issue.IssueType, 1);
+                }
+
                 stats.EndTime = DateTime.Now;
 
-                progressService?.Report(100.0, $"QC Analysis completed. Found {result.Issues.Count} issues.");
+                progressService?.Report(100.0, $"QC Analysis completed. Found {result.Issues.Count} verified issues.");
                 result.Succeeded = true;
                 result.Message = stats.GetSummaryString();
                 LoggingService.Info(result.Message);
@@ -191,6 +204,90 @@ namespace GeometryQCAddIn.Core
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Rigorously verifies that detected issues genuinely exist (non-empty geometry, finite coordinates,
+        /// meaningful above-resolution values) and deduplicates repeated or reciprocal issues.
+        /// </summary>
+        private List<IssueResult> DeduplicateAndVerifyIssues(List<IssueResult> rawIssues, GeometryQCContext context)
+        {
+            var verified = new List<IssueResult>();
+            var seenIssueKeys = new HashSet<string>();
+            var duplicateFeaturePairs = new HashSet<string>();
+
+            // 1. Identify 100% duplicate feature pairs first to suppress redundant Overlap reports
+            for (int i = 0; i < rawIssues.Count; i++)
+            {
+                var issue = rawIssues[i];
+                if (issue.CheckId == "CHK_DUPLICATE" && issue.Oid.HasValue && issue.RelatedOids.Count > 0)
+                {
+                    long minOid = Math.Min(issue.Oid.Value, issue.RelatedOids[0]);
+                    long maxOid = Math.Max(issue.Oid.Value, issue.RelatedOids[0]);
+                    duplicateFeaturePairs.Add($"{minOid}_{maxOid}");
+                }
+            }
+
+            for (int i = 0; i < rawIssues.Count; i++)
+            {
+                var issue = rawIssues[i];
+
+                // 2. Verification: Ensure issue has valid, finite location
+                if (issue.Location == null ||
+                    double.IsNaN(issue.Location.X) || double.IsNaN(issue.Location.Y) ||
+                    double.IsInfinity(issue.Location.X) || double.IsInfinity(issue.Location.Y))
+                {
+                    continue;
+                }
+
+                // Ensure geometry exists and is non-empty
+                if (issue.IssueGeometry != null && issue.IssueGeometry.IsEmpty)
+                {
+                    continue;
+                }
+
+                // 3. Suppress redundant Overlap for identical duplicate features
+                if (issue.CheckId == "CHK_OVERLAP" && issue.Oid.HasValue && issue.RelatedOids.Count > 0)
+                {
+                    long minOid = Math.Min(issue.Oid.Value, issue.RelatedOids[0]);
+                    long maxOid = Math.Max(issue.Oid.Value, issue.RelatedOids[0]);
+                    if (duplicateFeaturePairs.Contains($"{minOid}_{maxOid}"))
+                    {
+                        continue;
+                    }
+                }
+
+                // 4. Construct normalized deduplication key
+                // Round coordinates to ~1 millimeter precision in map units
+                double locX = Math.Round(issue.Location.X, 3);
+                double locY = Math.Round(issue.Location.Y, 3);
+
+                // For Missing Junction: exactly one defect per target feature at this specific physical coordinate
+                string issueKey;
+                if (issue.CheckId == "CHK_JUNCTION")
+                {
+                    long gX = (long)Math.Round(issue.Location.X * 50.0);
+                    long gY = (long)Math.Round(issue.Location.Y * 50.0);
+                    issueKey = $"{issue.CheckId}##{issue.LayerUri}##{issue.Oid}##{gX}_{gY}";
+                }
+                else if (issue.Oid.HasValue && issue.RelatedOids.Count > 0)
+                {
+                    var allOids = new List<long>(issue.RelatedOids) { issue.Oid.Value };
+                    allOids.Sort();
+                    issueKey = $"{issue.CheckId}##{issue.LayerUri}##{string.Join("_", allOids)}##{locX}_{locY}";
+                }
+                else
+                {
+                    issueKey = $"{issue.CheckId}##{issue.LayerUri}##{issue.Oid}##{locX}_{locY}";
+                }
+
+                if (seenIssueKeys.Add(issueKey))
+                {
+                    verified.Add(issue);
+                }
+            }
+
+            return verified;
         }
     }
 }

@@ -53,6 +53,7 @@ GeometryQCAddIn/
 ├── Models/
 │   ├── IssueSeverity.cs
 │   ├── IssueResult.cs
+│   ├── MapLayerItem.cs
 │   ├── QCFeature.cs
 │   └── QCStatistics.cs
 ├── Core/
@@ -105,16 +106,26 @@ GeometryQCAddIn/
 2. **Module (`GeometryQCModule.cs`)**: Initializes `ThemeService` and `SelectionService` on startup (protected by try/catch).
 3. **Theme Service (`ThemeService.cs`)**: Detects Light/Dark ArcGIS Pro mode and updates custom Navy/Cyan theme palette brushes dynamically.
 4. **Selection Service (`SelectionService.cs`)**: Listens to `MapSelectionChangedEvent`. In `Auto` mode, debounces selection changes (minimum 200ms) and calls `ResultsDockPaneViewModel.RunValidationAsync()`.
-5. **DockPane ViewModel (`ResultsDockPaneViewModel.cs`)**: Orchestrates execution on `QueuedTask`, updates progress via `ProgressService`, feeds `GeometryValidator`, updates `IssueGroups` observable collection, and pushes graphics to `QCGraphicManager`.
-6. **Geometry Validator (`GeometryValidator.cs`)**: Fetches polygon geometries using `GeometryDataProvider` (`DisplayCacheProvider` or `LiveQueryProvider`), builds `GeometryQCContext` (with `SpatialIndex` and `UnitConverter`), and executes the 10 `IGeometryCheck` instances concurrently or sequentially.
+5. **DockPane ViewModel (`ResultsDockPaneViewModel.cs`)**:
+   - Manages map layer selection through `AvailableLayers` and `SelectedLayer` (`MapLayerItem`), dynamically populated via `RefreshLayersAsync()`.
+   - Orchestrates execution on `QueuedTask`, updates progress via `ProgressService`, feeds `GeometryValidator` with the selected target layer URI, updates `IssueGroups` observable collection, and pushes graphics to `QCGraphicManager`.
+6. **Geometry Validator (`GeometryValidator.cs`)**:
+   - Fetches polygon geometries using `GeometryDataProvider` (`DisplayCacheProvider` or `LiveQueryProvider`), filtered by `targetLayerUri`.
+   - Builds `GeometryQCContext` (with `SpatialIndex`, `VertexIndex`, and `UnitConverter`).
+   - Executes the 10 `IGeometryCheck` instances with per-check and per-pair error isolation.
+   - Runs a central **Verification and Deduplication Pipeline** (`DeduplicateAndVerifyIssues`) before delivering results.
 7. **Results & Settings UI**: Bind to ViewModels with full Light/Dark Theme compatibility using `ThemeResources.xaml`.
 
 ---
 
 ## D. Functional Requirements Detail
 
-### 1. Data Ingestion & Extent Filtering
-* **Display Cache Mode (Default):** Read selected polygon features from active `MapView.Active.Map.GetLayersAsFlattenedList().OfType<FeatureLayer>()`. Query only layers whose shape type is `esriGeometryPolygon`. For in-memory speed, query features selected in the current map view extent.
+### 1. Data Ingestion, Extent Filtering & Target Layer Selection
+* **Target Layer Selection (`MapLayerItem`):**
+  - The user can select a specific polygon layer from the active map or choose `"All Polygon Layers"` via a ComboBox on the Results DockPane.
+  - Layer list refreshes dynamically via `RefreshLayersCommand` (`↻` button) querying `MapView.Active.Map.GetLayersAsFlattenedList().OfType<FeatureLayer>()`.
+  - When a target layer is selected, `GeometryDataProvider` strictly limits feature acquisition to that layer, preventing irrelevant cross-layer overlaps, snapping, or missing junction artifacts.
+* **Display Cache Mode (Default):** Read selected polygon features from in-memory selection cursor without issuing database queries. If map extent is active, filters features intersecting the extent.
 * **Live Query Mode:** Query the underlying geodatabase table directly via `FeatureLayer.Search()` with a spatial filter bounding the active map extent.
 * **Service Layer Guard:** Provide an explicit setting `EnableForServiceLayers` (default `false`). Skip ArcGIS Server / Feature Service layers unless explicitly enabled to avoid network bottlenecks.
 * **Multi-selection Support:** If features are selected across multiple layers, inspect all layers and preserve the source layer name and ObjectID (`OID`) on each reported issue.
@@ -123,48 +134,69 @@ GeometryQCAddIn/
 Implement 10 distinct, configurable checks inheriting from `IGeometryCheck`:
 
 1. **Check 1: Invalid Geometry (`InvalidGeometryCheck`)**
-   * Detects non-simple geometries according to OGC/Esri specifications using `GeometryEngine.Instance.IsSimple()`.
-   * Flags self-intersections, interior ring self-touch, inversion of inner/outer rings, and unclosed polygon rings.
+   - Detects non-simple geometries according to OGC/Esri specifications using `GeometryEngine.Instance.IsSimpleAsFeature()`.
+   - Flags self-intersections, interior ring self-touch, inversion of inner/outer rings, NaN/infinite coordinates, and degenerate rings (< 3 vertices).
+
 2. **Check 2: Overlaps (`OverlapCheck`)**
-   * Uses `SpatialIndex` bounding boxes to find candidate intersecting pairs `(Polygon A, Polygon B)`.
-   * Computes spatial intersection: `GeometryEngine.Instance.Intersection(polyA, polyB, GeometryDimension.esriGeometry2Dimension)`.
-   * Flags overlap if the intersection polygon area >= `OverlapMinAreaSqMeters` (default `0.0001` sq m).
+   - Uses `SpatialIndex` bounding boxes to find candidate intersecting pairs `(Polygon A, Polygon B)`.
+   - Per-Pair Exception Isolation: Wraps each candidate pair in `try/catch` to prevent a single corrupt geometry from aborting the entire overlap check.
+   - Computes spatial intersection: `GeometryEngine.Instance.Intersection(polyA, polyB)`.
+   - Multi-Part Decomposition: If two polygons overlap in multiple distinct areas, decomposes them via `GeometryEngine.Instance.MultipartToSinglePart(overlapPoly)` so each overlap patch is independently reported, measured, and zoomable.
+   - Shared Boundary Sliver Guard: Filters out microscopic slivers caused by floating-point rounding along shared edges (where width and height are below spatial reference tolerance `sr.XYTolerance`).
+   - Duplicate Prioritization: Skips identical duplicate geometries when `CheckDuplicates` is enabled, avoiding double-reporting.
+   - Human-Readable Area: Formats overlap area using `UnitConverter.FormatArea` (`m²`, `cm²`, `ha`).
+
 3. **Check 3: Duplicate Geometries (`DuplicateCheck`)**
-   * Checks if two features share the exact same boundary vertices (either forward or reversed), or if their overlap area ratio against both features exceeds `0.9999`.
+   - Uses multi-tier signature bucketing (PartCount, VertexCount, rounded Area, rounded Length) before exact `GeometryEngine.Instance.Equals()`.
+   - Symmetrically deduplicates pairs `(fA, fB)` and `(fB, fA)`.
+
 4. **Check 4: Enclosed Gaps (`GapCheck`)**
-   * Computes the union or merged boundary of adjacent selected polygons within their mutual convex hull.
-   * Identifies unassigned slivers/voids enclosed by polygons whose area is between `GapMinAreaSqMeters` (default `0.001` sq m) and a maximum sliver threshold, excluding external outer voids.
+   - Groups touching/adjacent polygons into localized clusters.
+   - Computes cluster union and convex hull to identify internal enclosed voids/holes, strictly distinguishing them from outer empty space.
+   - Flags voids whose area $\ge \text{GapMinAreaSqMeters}$ (default `0.001` sq m).
+
 5. **Check 5: Multi-Part Features (`MultiPartCheck`)**
-   * Checks `polygon.PartCount > 1`. Flags multipart polygons and reports total part count.
+   - Checks `polygon.PartCount > 1`. Flags multipart polygons and reports total part count.
+
 6. **Check 6: Short Segments (`ShortSegmentCheck`)**
-   * Iterates through every segment of every ring in the polygon.
-   * Computes geodesic or planar segment length in map units, converts to centimeters via `UnitConverter`.
-   * Flags segments where `length < ShortSegmentThresholdCm` (default `10.0` cm).
+   - Iterates through all polygon segments across all parts.
+   - Degenerate Segment Guard: Ignores sub-tolerance degenerate segments ($< \text{sr.XYTolerance}$) to prevent misreporting 0.00 cm artifacts.
+   - Converts segment length to real-world units via `UnitConverter.FormatLinearDistance`.
+   - Flags segments where $\text{length} < \text{ShortSegmentThresholdCm}$ (default `10.0` cm).
+
 7. **Check 7: Angle Issues (`AngleIssueCheck`)**
-   * Analyzes the interior/exterior vertex angle between consecutive segments:
+   - Analyzes the interior/exterior vertex angle between consecutive segments:
      $$\vec{v}_1 = P_{i-1} - P_i, \quad \vec{v}_2 = P_{i+1} - P_i$$
-     $$\theta = \arccos\left(\frac{\vec{v}_1 \cdot \vec{v}_2}{\|\vec{v}_1\| \|\vec{v}_2\|}\right) \times \frac{180}{\pi}$$
-   * Flags vertices where $\theta < \text{AngleThresholdDegrees}$ (default `5.0^\circ`).
+     $$\theta = \arccos\left(\text{clamp}\left(\frac{\vec{v}_1 \cdot \vec{v}_2}{\|\vec{v}_1\| \|\vec{v}_2\|}, -1, 1\right)\right) \times \frac{180}{\pi}$$
+   - Properly accounts for closed ring connectivity (skipping duplicate closing vertex).
+   - Flags vertices where $\theta < \text{AngleThresholdDegrees}$ (default `5.0^\circ`).
+
 8. **Check 8: Snap Issues (`SnapIssueCheck`)**
-   * Compares each vertex against all other vertices in nearby features or non-adjacent segments of the same feature.
-   * Flags pairs where $0 < \text{distance} \le \text{SnapToleranceCm}$ (default `1.0` cm).
+   - Uses `VertexIndex` spatial radius search around each vertex.
+   - Minimum Distance Threshold: Excludes vertex pairs separated by less than the spatial reference resolution ($\le \max(\text{sr.XYTolerance}, 0.5\text{ mm})$); vertices within tolerance are cleanly coincident and snapped, NOT snap errors.
+   - Closed-Ring Coordinate Normalization: Normalizes reporting keys by rounded coordinates so the closing vertex of a closed ring cannot trigger duplicate snap issues.
+   - Flags non-coincident pairs where $\text{minDistance} < \text{distance} \le \text{SnapToleranceCm}$ (default `1.0` cm).
+
 9. **Check 9: Redundant / Collinear Vertices (`RedundantVertexCheck`)**
-   * Identifies unnecessary vertices situated on an almost straight line between their adjacent neighbors.
-   * Flags vertex if the angle between incoming and outgoing segments $\ge \text{RedundantVertexAngleDegrees}$ (default `179.9^\circ`).
+   - Identifies unnecessary vertices situated on an almost straight line between their adjacent neighbors:
+     $$\text{StraightAngle} = 180^\circ - \text{DeflectionAngle} \ge \text{RedundantVertexAngleDegrees} \quad (\text{default } 179.9^\circ)$$
+   - **Topological Junction Vertex Guard (`IsJunctionVertex`):**
+     Before flagging a collinear vertex as redundant, the check inspects `context.VertexIndex` and `context.SpatialIndex`. If another feature shares a vertex at that point (coincident node) or if an adjacent feature's boundary touches/terminates at that vertex (T-junction), the vertex is recognized as a **Topological Junction Vertex** and is **preserved** (NOT reported as an error).
+
 10. **Check 10: Missing Junction Vertices (`JunctionVertexCheck`)**
-    * Detects T-junctions: where a vertex $V$ of Polygon A lies within $\le \text{MissingJunctionToleranceCm}$ (default `1.0` cm) of an edge segment $(P_1, P_2)$ of Polygon B, but Polygon B lacks a coincident vertex at that coordinate.
-    * Uses metric perpendicular projection distance:
-      $$t = \frac{(V - P_1) \cdot (P_2 - P_1)}{\|P_2 - P_1\|^2}$$
-      Ensures $V$ projects strictly inside the segment interior (avoiding false flags on endpoints).
+    - Detects T-junctions: where a vertex $V$ of Polygon A lies within $\le \text{MissingJunctionToleranceCm}$ (default `1.0` cm) of an edge segment $(P_1, P_2)$ of Polygon B, but Polygon B lacks a coincident vertex.
+    - Endpoint Coincidence Guard: Skips vertices that are within tolerance of segment endpoints $P_1$ or $P_2$ (already snapped).
+    - Closing Vertex Guard: Skips polygon closing vertex duplicate index.
+    - Symmetric Key Deduplication: Normalizes pair reporting keys `min(OidA, OidB)_max(OidA, OidB)` to prevent duplicate reciprocal reports.
 
-### 3. Execution Control & Threading
-* All spatial queries and geometry operations must execute inside `QueuedTask.Run()` to respect the ArcGIS Pro SDK apartment model.
-* Support cooperative cancellation via `CancellationTokenSource`.
-* Emit real-time percentage and status updates through `ProgressService`.
+---
 
-### 4. Interactive Results & Map Graphics
-* Selecting an issue in the Results tree triggers `ZoomToIssueAsync`: centers the `MapView` on the issue geometry with a 20% bounding buffer and flashes/highlights the geometry.
-* Map graphic overlays must use temporary graphics via `MapView.Active.AddOverlay` or temporary CIM graphic containers, removable with a single "Clear Results" command.
+### 3. Results Verification & Deduplication Pipeline (`GeometryValidator.cs`)
+All raw issues emitted by checks pass through a centralized pipeline (`DeduplicateAndVerifyIssues`):
+1. **Existence Verification:** Validates that issue locations have finite, non-NaN coordinates and that `IssueGeometry` is not empty.
+2. **Duplicate/Overlap Disambiguation:** When two features are 100% coincident duplicates, `Duplicate Geometry` takes precedence and redundant `Overlap` issues for that pair are suppressed.
+3. **Pairwise Symmetric Normalization:** For pairwise issues (Overlap, Duplicate, Snap, Junction), feature IDs are normalized (`min(OidA, OidB), max(OidA, OidB)`), eliminating duplicate reciprocal reports (A→B and B→A).
+4. **Millimeter Spatial Deduplication:** Coordinates are rounded to millimeter precision (`Math.Round(coord, 3)`), discarding repeated issues emitted at the exact same physical location.
 
 ---
 
@@ -181,143 +213,70 @@ Create a custom tab without duplicating buttons on the default "Add-Ins" tab:
 * **Group 2:** `GeometryQC_PanelsGroup` ("Panels", `appearsOnAddInTab="false"`)
   * Button `GeometryQC_ResultsBtn` (Large, Caption "Results", icon `Table32.png`)
   * Button `GeometryQC_SettingsBtn` (Large, Caption "Settings", icon `GenericOptions32.png`)
-*(Note: Groups must explicitly specify `appearsOnAddInTab="false"` so they do not appear redundantly in the default ArcGIS Pro `Add-Ins` tab, remaining exclusively under `Geometry QC`.)*
 
 ### 2. Results DockPane (`ResultsDockPane.xaml`)
 Docked on the right side:
-* **Header:**
+* **Header Panel:**
   * Title: "Geometry QC Results" (`DockPaneHeaderStyle`).
   * Subtitle: Dynamic performance metrics (`MetricsText`), e.g., "Analyzed 150 features in 184ms".
-  * Issue Counter Badge: Pill-shaped border (`CornerRadius="12"`, background `{DynamicResource Esri_Blue50a_Brush}`, foreground white) displaying "Issues: N".
-* **Progress Bar:** Thin progress indicator visible only when `IsBusy == true`, with a textual status label and inline "Cancel" button.
+  * Issue Counter Badge: Pill-shaped badge displaying total verified issue count.
+* **Target Layer Selector Card:**
+  * Label: "Layer:".
+  * `ComboBox`: Bound to `AvailableLayers` and `SelectedLayer`, showing layer names or "All Polygon Layers".
+  * Refresh Button: `↻` button bound to `RefreshLayersCommand` to dynamically refresh map layers.
+* **Progress Indicator Card:** Thin progress bar visible only when `IsBusy == true`, with status text and inline "Cancel" button.
 * **Issue TreeView:**
-  * Parent Node: Issue Category Name (e.g. "Overlaps", "Angle Issue") with count badge.
+  * Category Header: Issue category name with count badge.
   * Child Node: Feature OID, Layer Name in parentheses, short description, and an inline "Zoom" button.
-* **Selected Issue Details Panel:** Appears at the bottom of the tree, displaying full diagnostic text of the selected error.
-* **Bottom Toolbar:** Full-width "Run QC" and "Clear Results" action buttons (`Style="{DynamicResource Esri_Button}"`).
+* **Selected Issue Details Panel:** Displays complete diagnostic text of the selected error.
+* **Bottom Toolbar:** Full-width "Run QC" and "Clear Results" action buttons.
 
 ### 3. Settings DockPane (`SettingsDockPane.xaml`)
 * **General Execution Group:**
-  * CheckBox: "Enable Geometry QC".
-  * RadioButtons: "Display Cache (In-Memory Selection, Default)" vs "Live Query (Feature Layer Filter)".
-  * CheckBox: "Enable for Service Layers".
-  * RadioButtons: "Manual Run (Run button)" vs "Auto-run on Selection Change".
-* **Checks & Tolerances Group (with numeric TextBoxes styled via `ThemeAwareTextBoxStyle`):**
-  * CheckBox + Input: Invalid Geometry.
-  * CheckBox + Input: Overlaps (Min Overlap Area in sq m).
-  * CheckBox + Input: Duplicate Geometries.
-  * CheckBox + Input: Enclosed Gaps (Min Gap Area in sq m).
-  * CheckBox + Input: Multi-Part Features.
-  * CheckBox + Input: Short Segments (Threshold in cm).
-  * CheckBox + Input: Angle Issues (Min Angle in degrees).
-  * CheckBox + Input: Snap Issues (Tolerance in cm).
-  * CheckBox + Input: Redundant / Collinear Vertices (Angle Threshold in degrees).
-  * CheckBox + Input: Missing Junction Vertices (Tolerance in cm).
+  * Enable/Disable QC toggle.
+  * Data source selection: Display Cache vs. Live Query.
+  * Enable for Service Layers toggle.
+  * Execution mode: Manual Run vs. Auto-run on Selection Change.
+* **Checks & Tolerances Group (with numeric inputs):**
+  * Toggles and tolerance values for each of the 10 checks.
 * **Footer:** "Restore Defaults" button.
 
 ### 4. Native Theme Styling (`ThemeResources.xaml` & `ThemeService.cs`)
-* Must merge `pack://application:,,,/ArcGIS.Desktop.Framework;component/Themes/Default.xaml`.
-* Must **NOT** alias DynamicResources using `<DynamicResourceExtension>` inside the dictionary (which throws `InvalidOperationException` on `Foreground`).
-* Must directly apply official Esri dynamic resource keys:
-  * Primary Text: `{DynamicResource Esri_TextStyleDefaultBrush}`
-  * Subdued Text: `{DynamicResource Esri_TextStyleSubduedBrush}`
-  * Header/Emphasis: `{DynamicResource Esri_TextStyleEmphasisBrush}`
-  * Disabled Text: `{DynamicResource Esri_TextStyleDisabledBrush}`
-  * Window/DockPane Background: `{DynamicResource Esri_DockPaneClientAreaBackgroundBrush}`
-  * Input Background: `{DynamicResource Esri_ControlBackgroundBrush}`
-  * Hover Background: `{DynamicResource Esri_BackgroundHoverBrush}`
-  * Selection: `{DynamicResource Esri_BackgroundSelectedBrush}`
-  * Borders: `{DynamicResource Esri_BorderBrush}`
-* **Dynamic Palette Management (`ThemeService.cs`):** Manages a sleek Navy/Cyan/Turquoise color palette across both Light and Dark modes. Detects ArcGIS Pro theme changes dynamically and injects harmonious styling brushes into application resources.
+* Merges `pack://application:,,,/ArcGIS.Desktop.Framework;component/Themes/Default.xaml`.
+* Manages a sleek Navy/Cyan/Turquoise color palette across both Light and Dark modes.
+* Detects ArcGIS Pro theme changes dynamically and injects harmonious styling brushes into application resources.
 
 ---
 
 ## F. Internal Processing Logic & Mathematical Formulas
 
 ### 1. Coordinate & Unit Conversion (`UnitConverter.cs`)
-All spatial tolerances are configured in real-world metric units (centimeters or square meters), while features may be in Projected or Geographic Coordinate Systems:
-* If Projected (`SpatialReference.Unit` is linear): Convert tolerance in cm to map units using `unit.ConversionFactor`:
-  $$\text{tol}_{\text{map}} = \frac{\text{tol}_{\text{cm}}}{100.0 \times \text{conversionFactorToMeters}}$$
-* If Geographic (degrees): Project coordinates dynamically or approximate via local latitude WGS84 meter conversion factor.
+* Linear conversion: `CentimetersToMapUnits`, `MetersToMapUnits`, `MapUnitsToCentimeters`, `FormatLinearDistance`.
+* Area conversion: `SqMetersToMapUnitsSq`, `MapUnitsToSqMeters`, `FormatArea` (converting map units squared to `cm²`, `m²`, `ha` with sample location latitude adjustment).
 
-### 2. Point-to-Segment Metric Projection (`GeometryHelpers.cs`)
-To find the distance from point $P$ to segment $(A, B)$ in 2D plane:
-$$\vec{AB} = B - A, \quad \vec{AP} = P - A$$
-$$L^2 = \vec{AB}_x^2 + \vec{AB}_y^2$$
-If $L^2 < 10^{-14}$, distance is $\|P - A\|$. Otherwise:
-$$t = \frac{\vec{AP}_x \vec{AB}_x + \vec{AP}_y \vec{AB}_y}{L^2}$$
-Projection point $Q$:
-* If $t \le 0: Q = A$
-* If $t \ge 1: Q = B$
-* Else: $Q = A + t \cdot \vec{AB}$
-$$\text{Distance} = \|P - Q\|$$
+### 2. Spatial Grid Indexing (`SpatialIndex.cs` & `VertexIndex.cs`)
+* Uses 64-bit coordinate packing bijection:
+  $$\text{Hash}(X, Y) = ((\text{long})(\text{uint})X \ll 32) \mid (\text{uint})Y$$
+  Guarantees zero hash collisions across all positive and negative coordinate grids.
 
 ### 3. Collinear Vertex Angle Formula (`RedundantVertexCheck.cs`)
 For vertex $P_i$ between $P_{i-1}$ and $P_{i+1}$:
 $$\vec{u} = P_i - P_{i-1}, \quad \vec{v} = P_{i+1} - P_i$$
 $$\cos \phi = \frac{\vec{u} \cdot \vec{v}}{\|\vec{u}\| \|\vec{v}\|}$$
-$$\text{Angle} = \arccos(\text{clamp}(\cos \phi, -1, 1)) \times \frac{180}{\pi}$$
-If $\text{Angle} \ge \text{Threshold}$ (e.g. $179.9^\circ$), vertex $P_i$ is collinear and redundant.
+$$\text{StraightAngle} = 180^\circ - \arccos(\text{clamp}(\cos \phi, -1, 1)) \times \frac{180}{\pi}$$
+If $\text{StraightAngle} \ge \text{Threshold}$ and $\text{IsJunctionVertex} == \text{false}$, vertex $P_i$ is flagged.
 
 ---
 
-## G. Expected Outputs
-
-1. **In-Memory Models:**
-   * An `IssueResult` object for each detected issue containing:
-     * `Id` (GUID)
-     * `Oid` (long)
-     * `LayerName` (string)
-     * `CheckName` (string)
-     * `Description` (string with exact measurements, e.g. "Acute angle of 3.2° detected at vertex 14")
-     * `Severity` (`Error` or `Warning`)
-     * `Geometry` (Point, Line, or Polygon highlighting the defect)
-     * `MetricValue` (double)
-     * `MetricUnit` (string, e.g., "cm", "deg", "sq m")
-2. **Settings Persistence:**
-   * Saved as JSON at `%LOCALAPPDATA%\GeometryQCAddIn\settings.json`.
-3. **Map Visual Feedback:**
-   * Highlight overlays drawn on map using specific CIM symbols:
-     * Overlaps: Semi-transparent red fill with dark red crosshatch outline.
-     * Angle Issues: Violet/Magenta diamond marker.
-     * Short Segments: Bright orange highlighted line.
-     * Missing Junctions: Cyan circle marker.
-     * Unclosed / Invalid: Crimson cross marker.
-4. **User Notifications:**
-   * Progress updates emitted to DockPane status bar.
-   * Safe dialogs via `ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show` on unexpected exceptions.
-
----
-
-## H. Additional Implementation Constraints & Rules
+## G. Additional Implementation Constraints & Rules
 
 1. **ArcGIS Pro Packaging Target:**
-   In `GeometryQCAddIn.csproj`, the packaging post-build target **must** place assemblies in `Install/` and copy the finished package to the project root directory for immediate user deployment:
-   ```xml
-   <Target Name="PackageArcGISProAddIn" AfterTargets="Build">
-     <PropertyGroup>
-       <AddInDir>$(TargetDir)AddInStaging</AddInDir>
-       <AddInPackage>$(TargetDir)GeometryQCAddIn.esriAddinX</AddInPackage>
-     </PropertyGroup>
-     <MakeDir Directories="$(AddInDir)\Install" />
-     <Copy SourceFiles="$(TargetDir)GeometryQCAddIn.dll" DestinationFolder="$(AddInDir)\Install" />
-     <Copy SourceFiles="$(TargetDir)GeometryQCAddIn.pdb" DestinationFolder="$(AddInDir)\Install" Condition="Exists('$(TargetDir)GeometryQCAddIn.pdb')" />
-     <Copy SourceFiles="$(TargetDir)GeometryQCAddIn.deps.json" DestinationFolder="$(AddInDir)\Install" Condition="Exists('$(TargetDir)GeometryQCAddIn.deps.json')" />
-     <Copy SourceFiles="$(ProjectDir)Config.daml" DestinationFolder="$(AddInDir)" />
-     <ItemGroup>
-       <AddinImages Include="$(ProjectDir)Images\**\*.*" />
-     </ItemGroup>
-     <Copy SourceFiles="@(AddinImages)" DestinationFolder="$(AddInDir)\Images\%(RecursiveDir)" Condition="'@(AddinImages)' != ''" />
-     <ZipDirectory SourceDirectory="$(AddInDir)" DestinationFile="$(AddInPackage)" Overwrite="true" />
-     <RemoveDir Directories="$(AddInDir)" />
-     <Copy SourceFiles="$(AddInPackage)" DestinationFolder="$(ProjectDir)" />
-   </Target>
-   ```
+   In `GeometryQCAddIn.csproj`, the packaging post-build target **must** place assemblies in `Install/` and copy the finished package to the project root directory for immediate user deployment.
 2. **Button Constructor Rule:**
    Every button class inheriting from `ArcGIS.Desktop.Framework.Contracts.Button` must set `Enabled = true;` in its parameterless constructor.
 3. **Module AutoLoad Rule:**
-   In `Config.daml`, specify `autoLoad="false"` on `<insertModule ...>` to prevent startup race conditions before project/map initialization.
+   In `Config.daml`, specify `autoLoad="false"` on `<insertModule ...>` to prevent startup race conditions.
 4. **Read-Only Safety:**
-   The Add-in must **never** start an edit operation or call `Row.Store()` / `Table.CreateRow()`. All geometry evaluation and graphic display must remain purely read-only and in-memory.
+   The Add-in must **never** start an edit operation or modify geodatabase tables. All geometry evaluations and overlays are strictly read-only and in-memory.
 5. **Ribbon Tab Isolation Rule (`appearsOnAddInTab="false"`):**
-   In `Config.daml`, ribbon `<group>` elements intended exclusively for the custom tab must set `appearsOnAddInTab="false"`. If set to `true` or omitted, ArcGIS Pro will duplicate the groups inside the generic "Add-Ins" tab.
+   In `Config.daml`, ribbon `<group>` elements intended exclusively for the custom tab must set `appearsOnAddInTab="false"` to prevent duplication in the generic "Add-Ins" tab.

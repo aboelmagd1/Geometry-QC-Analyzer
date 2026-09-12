@@ -28,16 +28,21 @@ namespace GeometryQCAddIn.Core.Checks
                 var issues = new List<IssueResult>();
                 var pairs = context.SpatialIndex.FindCandidateOverlappingPairs();
                 var sr = context.SpatialReference;
-                double tolCm = context.Settings.MissingJunctionToleranceCm;
-                var reportedIssues = new HashSet<string>();
+                double tolCm = Math.Max(context.Settings.MissingJunctionToleranceCm, 0.5);
+                var reportedJunctions = new Dictionary<string, (IssueResult Issue, List<long> TouchingOids)>();
 
                 for (int p = 0; p < pairs.Count; p++)
                 {
                     context.ThrowIfCancellationRequested();
                     var (fA, fB) = pairs[p];
 
-                    InspectMissingJunctions(fA, fB, context, tolCm, sr, issues, reportedIssues);
-                    InspectMissingJunctions(fB, fA, context, tolCm, sr, issues, reportedIssues);
+                    InspectMissingJunctions(fA, fB, context, tolCm, sr, reportedJunctions);
+                    InspectMissingJunctions(fB, fA, context, tolCm, sr, reportedJunctions);
+                }
+
+                foreach (var kvp in reportedJunctions.Values)
+                {
+                    issues.Add(kvp.Issue);
                 }
 
                 return issues;
@@ -50,8 +55,7 @@ namespace GeometryQCAddIn.Core.Checks
             GeometryQCContext context,
             double tolCm,
             SpatialReference? sr,
-            List<IssueResult> issues,
-            HashSet<string> reportedIssues)
+            Dictionary<string, (IssueResult Issue, List<long> TouchingOids)> reportedJunctions)
         {
             var polyA = sourceFeature.Geometry;
             var polyB = targetFeature.Geometry;
@@ -66,10 +70,15 @@ namespace GeometryQCAddIn.Core.Checks
             for (int partIdx = 0; partIdx < partsA.Count; partIdx++)
             {
                 var part = partsA[partIdx];
-                for (int v = 0; v < part.Count; v++)
+                int vLimit = (part.Count > 1 && part[0].X == part[part.Count - 1].X && part[0].Y == part[part.Count - 1].Y)
+                    ? part.Count - 1
+                    : part.Count;
+
+                for (int v = 0; v < vLimit; v++)
                 {
                     var vA = part[v];
-                    double tolMapUnits = UnitConverter.CentimetersToMapUnits(tolCm, sr, vA);
+                    double tolMapUnits = Math.Max(UnitConverter.CentimetersToMapUnits(tolCm, sr, vA), Math.Max(sr?.XYTolerance ?? 0.005, 0.02));
+                    double tolSq = tolMapUnits * tolMapUnits;
 
                     for (int s = 0; s < targetSegments.Count; s++)
                     {
@@ -92,7 +101,6 @@ namespace GeometryQCAddIn.Core.Checks
                             // Must be strictly interior (separated from segment endpoints by more than tolerance)
                             double d1Sq = (projX - p1.X) * (projX - p1.X) + (projY - p1.Y) * (projY - p1.Y);
                             double d2Sq = (projX - p2.X) * (projX - p2.X) + (projY - p2.Y) * (projY - p2.Y);
-                            double tolSq = tolMapUnits * tolMapUnits;
 
                             if (d1Sq > tolSq && d2Sq > tolSq)
                             {
@@ -106,24 +114,43 @@ namespace GeometryQCAddIn.Core.Checks
 
                                     if (!hasVertex)
                                     {
-                                        string key = $"{sourceFeature.Oid}_{targetFeature.Oid}_{Math.Round(vA.X, 4)}_{Math.Round(vA.Y, 4)}";
-                                        if (reportedIssues.Add(key))
+                                        // Spatial clustering key by projection coordinate (2 cm bins) on target polygon
+                                        long gridX = (long)Math.Round(projX * 50.0);
+                                        long gridY = (long)Math.Round(projY * 50.0);
+                                        string key = $"{targetFeature.LayerUri}_{targetFeature.Oid}_{gridX}_{gridY}";
+
+                                        if (reportedJunctions.TryGetValue(key, out var entry))
                                         {
-                                            issues.Add(new IssueResult
+                                            if (!entry.TouchingOids.Contains(sourceFeature.Oid))
+                                            {
+                                                entry.TouchingOids.Add(sourceFeature.Oid);
+                                                if (!entry.Issue.RelatedOids.Contains(sourceFeature.Oid))
+                                                {
+                                                    entry.Issue.RelatedOids.Add(sourceFeature.Oid);
+                                                }
+                                                entry.Issue.Description = $"Feature OID {targetFeature.Oid} is missing a junction vertex (Part {tPartIdx + 1}, Segment {segIdx + 1}) where it touches Feature OID {string.Join(", ", entry.TouchingOids)}.";
+                                            }
+                                        }
+                                        else
+                                        {
+                                            var touchingOids = new List<long> { sourceFeature.Oid };
+                                            var issue = new IssueResult
                                             {
                                                 CheckId = Id,
                                                 IssueType = Name,
-                                                Oid = sourceFeature.Oid,
-                                                RelatedOids = new List<long> { targetFeature.Oid },
-                                                LayerName = sourceFeature.LayerName,
-                                                LayerUri = sourceFeature.LayerUri,
+                                                Oid = targetFeature.Oid,
+                                                RelatedOids = new List<long>(touchingOids),
+                                                LayerName = targetFeature.LayerName,
+                                                LayerUri = targetFeature.LayerUri,
                                                 Location = vA,
                                                 IssueGeometry = vA,
                                                 Value = Math.Round(Math.Sqrt(distSq), 4),
                                                 Unit = "map units",
-                                                Description = $"Vertex on Feature OID {sourceFeature.Oid} touches boundary of Feature OID {targetFeature.Oid} (Part {tPartIdx + 1}, Segment {segIdx + 1}) without a matching junction vertex.",
+                                                Description = $"Feature OID {targetFeature.Oid} is missing a junction vertex (Part {tPartIdx + 1}, Segment {segIdx + 1}) where it touches Feature OID {sourceFeature.Oid}.",
                                                 Severity = nameof(IssueSeverity.Warning)
-                                            });
+                                            };
+
+                                            reportedJunctions[key] = (issue, touchingOids);
                                         }
                                     }
                                 }

@@ -1,3 +1,4 @@
+using System;
 using System.Windows.Controls;
 
 namespace GeometryQCAddIn.UI
@@ -10,6 +11,14 @@ namespace GeometryQCAddIn.UI
         public ResultsDockPaneView()
         {
             InitializeComponent();
+        }
+
+        private async void LayerComboBox_DropDownOpened(object sender, EventArgs e)
+        {
+            if (DataContext is ResultsDockPaneViewModel vm)
+            {
+                await vm.RefreshLayersAsync();
+            }
         }
     }
 }

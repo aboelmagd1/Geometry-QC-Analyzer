@@ -28,6 +28,7 @@ namespace GeometryQCAddIn.Core
         public abstract Task<DataAcquisitionResult> AcquireFeaturesAsync(
             MapView mapView,
             GeometryQCSettings settings,
+            string? targetLayerUri,
             CancellationToken cancellationToken);
 
         protected static bool IsPolygonLayer(FeatureLayer layer)

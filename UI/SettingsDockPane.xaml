@@ -104,7 +104,7 @@
                 <CheckBox Content="10. Missing Junction Vertices" IsChecked="{Binding CheckMissingJunctions}" Margin="0,4,0,2" FontWeight="Medium" Foreground="{DynamicResource PrimaryTextBrush}"/>
                 <StackPanel Orientation="Horizontal" Margin="20,0,0,4">
                     <TextBlock Text="Tolerance (cm): " Style="{DynamicResource SecondaryTextStyle}" VerticalAlignment="Center"/>
-                    <TextBox Text="{Binding MissingJunctionToleranceCm, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ThemeAwareTextBoxStyle}" Width="70" Height="22"/>
+                    <TextBox Text="{Binding MissingJunctionToleranceCm, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search tolerance in centimeters (Default: 10 cm. E.g. 10 cm = 0.10 m)" Style="{DynamicResource ThemeAwareTextBoxStyle}" Width="70" Height="22"/>
                 </StackPanel>
 
             </StackPanel>

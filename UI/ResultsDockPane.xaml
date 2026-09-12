@@ -19,6 +19,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -41,8 +42,22 @@
             </Grid>
         </Border>
 
+        <!-- Target Layer Selector Card -->
+        <Border Grid.Row="1" Background="{DynamicResource CardBackgroundBrush}" Margin="6,6,6,2" Padding="10,6" CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Layer:" Style="{DynamicResource BodyTextStyle}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableLayers}" SelectedItem="{Binding SelectedLayer}" DisplayMemberPath="DisplayName" Height="26" VerticalContentAlignment="Center" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource PrimaryTextBrush}" BorderBrush="{DynamicResource BorderBrush}" DropDownOpened="LayerComboBox_DropDownOpened"/>
+                <Button Grid.Column="2" Command="{Binding RefreshLayersCommand}" Style="{DynamicResource BlueActionButtonStyle}" ToolTip="Refresh Map Layers" Margin="6,0,0,0" Padding="8,2" Content="↻" FontSize="13" VerticalAlignment="Center" Height="26"/>
+            </Grid>
+        </Border>
+
         <!-- Progress Indicator Card -->
-        <Border Grid.Row="1" Background="{DynamicResource CardBackgroundBrush}" Margin="6,6,6,2" Padding="10,8" CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
+        <Border Grid.Row="2" Background="{DynamicResource CardBackgroundBrush}" Margin="6,4,6,2" Padding="10,8" CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
             <StackPanel Orientation="Vertical">
                 <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="4" Margin="0,0,0,6" Foreground="{DynamicResource PrimaryAccentBrush}"/>
                 <Grid>
@@ -53,7 +68,7 @@
         </Border>
 
         <!-- Categorized Issue Tree View -->
-        <TreeView Grid.Row="2" ItemsSource="{Binding IssueGroups}" ItemContainerStyle="{DynamicResource ThemeAwareTreeViewItemStyle}" Margin="6,4" Background="Transparent" BorderThickness="0">
+        <TreeView Grid.Row="3" ItemsSource="{Binding IssueGroups}" ItemContainerStyle="{DynamicResource ThemeAwareTreeViewItemStyle}" Margin="6,4" Background="Transparent" BorderThickness="0">
             <TreeView.ItemTemplate>
                 <HierarchicalDataTemplate ItemsSource="{Binding Issues}">
                     <!-- Category Header -->
@@ -90,7 +105,7 @@
         </TreeView>
 
         <!-- Selected Issue Details Panel -->
-        <Border Grid.Row="3" Background="{DynamicResource CardBackgroundBrush}" Margin="6,2,6,6" Padding="10" CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+        <Border Grid.Row="4" Background="{DynamicResource CardBackgroundBrush}" Margin="6,2,6,6" Padding="10" CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                 Visibility="{Binding SelectedIssue, Converter={StaticResource BoolToVis}}">
             <StackPanel Orientation="Vertical">
                 <TextBlock Text="Issue Details" Style="{DynamicResource SectionHeaderStyle}" Foreground="{DynamicResource SecondaryAccentBrush}" Margin="0,0,0,4"/>
@@ -99,7 +114,7 @@
         </Border>
 
         <!-- Action Toolbar Bottom -->
-        <Border Grid.Row="4" Background="{DynamicResource SidebarHeaderBackgroundBrush}" Padding="10" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+        <Border Grid.Row="5" Background="{DynamicResource SidebarHeaderBackgroundBrush}" Padding="10" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>

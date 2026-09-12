@@ -22,6 +22,7 @@ namespace GeometryQCAddIn.Core
         public override async Task<DataAcquisitionResult> AcquireFeaturesAsync(
             MapView mapView,
             GeometryQCSettings settings,
+            string? targetLayerUri,
             CancellationToken cancellationToken)
         {
             var result = new DataAcquisitionResult();
@@ -31,6 +32,11 @@ namespace GeometryQCAddIn.Core
             {
                 var extent = mapView.Extent;
                 var layers = mapView.Map.GetLayersAsFlattenedList().OfType<FeatureLayer>().ToList();
+
+                if (!string.IsNullOrEmpty(targetLayerUri))
+                {
+                    layers = layers.Where(l => l.URI == targetLayerUri || l.Name == targetLayerUri).ToList();
+                }
 
                 foreach (var layer in layers)
                 {

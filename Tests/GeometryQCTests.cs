@@ -74,7 +74,21 @@ namespace GeometryQCAddIn.Tests
             {
                 throw new Exception($"Area conversion test failed: Expected 10.0, got {mapUnitsSq}");
             }
-            Console.WriteLine("✓ Area conversion test passed.");
+
+            // Test FormatArea
+            var (val1, unit1) = UnitConverter.FormatArea(10.0, null);
+            if (unit1 != "m²" || Math.Abs(val1 - 10.0) > 1e-3)
+            {
+                throw new Exception($"FormatArea test failed: Expected 10 m², got {val1} {unit1}");
+            }
+
+            var (val2, unit2) = UnitConverter.FormatArea(0.0005, null);
+            if (unit2 != "cm²" || Math.Abs(val2 - 5.0) > 1e-2)
+            {
+                throw new Exception($"FormatArea test failed for small area: Expected 5 cm², got {val2} {unit2}");
+            }
+
+            Console.WriteLine("✓ Area conversion and formatting tests passed.");
         }
 
         private static void TestUnitConverter()
@@ -90,6 +104,13 @@ namespace GeometryQCAddIn.Tests
             if (unit != "cm" || Math.Abs(val - 6.2) > 0.1)
             {
                 throw new Exception($"UnitConverter formatting failed: Expected 6.2 cm, got {val} {unit}");
+            }
+
+            // Test sub-millimeter distance formatting (0.0004 m = 0.04 cm = 0.4 mm)
+            var (valMm, unitMm) = UnitConverter.FormatLinearDistance(0.0004, null);
+            if (unitMm != "mm" || Math.Abs(valMm - 0.4) > 1e-3)
+            {
+                throw new Exception($"UnitConverter sub-millimeter formatting failed: Expected 0.4 mm, got {valMm} {unitMm}");
             }
 
             Console.WriteLine("✓ UnitConverter tests passed.");

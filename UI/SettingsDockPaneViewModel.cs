@@ -248,7 +248,7 @@ namespace GeometryQCAddIn.UI
             _settings.CheckRedundantVertices = true;
             _settings.RedundantVertexAngleDegrees = 179.9;
             _settings.CheckMissingJunctions = true;
-            _settings.MissingJunctionToleranceCm = 1.0;
+            _settings.MissingJunctionToleranceCm = 10.0;
 
             SaveSettings();
 
