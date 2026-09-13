@@ -35,7 +35,7 @@ GIS Analysts, Cadastral Surveyors, Cartographers, and Spatial Data Quality Engin
 * **Programming Language:** C# (version 12.0 / `latest`, nullable reference types enabled).
 * **Target Framework:** `.NET 8.0-windows` (`net8.0-windows`), targeting Windows x64 (`win-x64`).
 * **UI Framework:** Windows Presentation Foundation (WPF) with ArcGIS Pro native styling (`pack://application:,,,/ArcGIS.Desktop.Framework;component/Themes/Default.xaml`).
-* **Runtime Environment:** ArcGIS Pro 3.0+ (tested on ArcGIS Pro 3.4.x, x64).
+* **Runtime Environment:** ArcGIS Pro 3.3.x, 3.4.x and later (.NET 8 runtime, x64).
 * **Target Output Package:** ArcGIS Pro Add-in Package (`.esriAddinX`), where all managed assemblies (`.dll`, `.pdb`, `.deps.json`) **must** reside inside an internal `Install/` folder within the zip archive.
 * **Dependencies & References:**
   * `ArcGIS.Core.dll`
@@ -300,7 +300,7 @@ Docked on the right side:
 * **لغة البرمجة:** C# (الإصدار 12.0 / `latest` مع تفعيل `nullable reference types`).
 * **إطار العمل المستهدف:** `.NET 8.0-windows` لمعمارية Windows x64.
 * **واجهة المستخدم:** Windows Presentation Foundation (WPF) بنمط ArcGIS Pro الأصلي.
-* **بيئة التشغيل:** ArcGIS Pro 3.0 فما فوق (تم الاختبار على ArcGIS Pro 3.4.x).
+* **بيئة التشغيل:** ArcGIS Pro 3.3.x أو 3.4.x أو أحدث (بيئة .NET 8).
 * **حزمة المخرجات:** ملف `.esriAddinX`، وتوضع جميع المكتبات داخل مجلد داخلي باسم `Install/`.
 
 ---

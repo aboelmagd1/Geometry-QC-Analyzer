@@ -1,14 +1,14 @@
 <ArcGIS defaultAssembly="GeometryQCAddIn.dll" defaultNamespace="GeometryQCAddIn" xmlns="http://schemas.esri.com/DADF/Registry" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://schemas.esri.com/DADF/Registry file:///C:/Program%20Files/ArcGIS/Pro/bin/ArcGIS.Desktop.Framework.xsd">
-  <AddInInfo id="{8a7f921d-44a3-4b92-95f2-953e5e6080dc}" version="1.0.4" author="GIS Team" desktopVersion="3.0">
+  <AddInInfo id="{8a7f921d-44a3-4b92-95f2-953e5e6080dc}" version="1.0.5" author="GIS Team" desktopVersion="3.3">
     <Name>Geometry QC Analyzer</Name>
     <Description>High-performance, read-only Polygon Geometry Quality Control Analyzer for ArcGIS Pro.</Description>
     <Image>Images\AddinDesktop32.png</Image>
     <Author>GIS Quality Engineering</Author>
     <Company>ArcGIS Pro Solutions</Company>
-    <Date>2026-09-12</Date>
+    <Date>2026-09-13</Date>
     <Subject>Geometry Quality Control</Subject>
     <Targets>
-      <Target name="ArcGISPro" version="3.0" />
+      <Target name="ArcGISPro" version="3.3" />
     </Targets>
   </AddInInfo>
 
@@ -24,14 +24,14 @@
         </button>
 
         <button id="GeometryQC_RunBtn" caption="Run QC" className="UI.RunQCButton" loadOnClick="true"
-                smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericPlay16.png"
-                largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericPlay32.png">
+                smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericRun16.png"
+                largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericRun32.png">
           <tooltip heading="Run Geometry QC">Analyze selected polygon features within current map extent for geometric issues.<disabledText /></tooltip>
         </button>
 
         <button id="GeometryQC_ResultsBtn" caption="Results" className="UI.ResultsButton" loadOnClick="true"
-                smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/Table16.png"
-                largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/Table32.png">
+                smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/TableOpen16.png"
+                largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/TableOpen32.png">
           <tooltip heading="Results Panel">Open the Geometry QC Results DockPane.<disabledText /></tooltip>
         </button>
 
@@ -43,7 +43,7 @@
 
         <button id="GeometryQC_ClearBtn" caption="Clear Results" className="UI.ClearResultsButton" loadOnClick="true"
                 smallImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericEraser16.png"
-                largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericEraser32.png">
+                largeImage="pack://application:,,,/ArcGIS.Desktop.Resources;component/Images/GenericDeleteRed32.png">
           <tooltip heading="Clear Results">Clear detected issues and remove temporary map graphics.<disabledText /></tooltip>
         </button>
 

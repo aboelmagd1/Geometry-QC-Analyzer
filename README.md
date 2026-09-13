@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/ArcGIS%20Pro-3.0%2B%20%7C%203.4.x-007AC2?style=flat-square&logo=esri" alt="ArcGIS Pro" />
+  <img src="https://img.shields.io/badge/ArcGIS%20Pro-3.3%20%7C%203.4.x%2B-007AC2?style=flat-square&logo=esri" alt="ArcGIS Pro" />
   <img src="https://img.shields.io/badge/.NET-8.0--windows-512BD4?style=flat-square&logo=dotnet" alt=".NET 8" />
   <img src="https://img.shields.io/badge/C%23-12.0-239120?style=flat-square&logo=csharp" alt="C# 12" />
   <img src="https://img.shields.io/badge/License-MIT-green.style=flat-square" alt="License" />
@@ -100,7 +100,7 @@ Developed with the assistance of **Advanced AI**, it evaluates selected features
 
 ### 📦 متطلبات التشغيل:
 * نظام التشغيل: **Windows 10 / 11 (x64)**
-* برنامج نظم المعلومات: **ArcGIS Pro 3.0** أو أحدث (تم الاختبار على **ArcGIS Pro 3.4.x**)
+* برنامج نظم المعلومات: **ArcGIS Pro 3.3.x أو 3.4.x أو أحدث** (بيئة Pro 3.x المبنية على .NET 8)
 * بيئة التشغيل: **.NET 8.0-windows Desktop Runtime**
 
 ---

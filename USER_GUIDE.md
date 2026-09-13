@@ -44,7 +44,7 @@ The **Geometry QC Analyzer** is an enterprise-grade Quality Control Add-In for *
 
 ### Prerequisites:
 * Operating System: **Windows 10 / 11 (x64)**
-* Host Application: **ArcGIS Pro 3.0 or higher** (fully certified up to **ArcGIS Pro 3.4.x**)
+* Host Application: **ArcGIS Pro 3.3.x, 3.4.x, or later** (compatible with all .NET 8 ArcGIS Pro releases)
 * Runtime: **.NET 8.0 Windows Desktop Runtime**
 
 ### Installation Steps:
@@ -272,7 +272,7 @@ Upon validation, temporary graphic overlays are drawn on the active map view:
 
 ### متطلبات التشغيل:
 - نظام تشغيل: **Windows 10 / 11 (x64)**
-- برنامج: **ArcGIS Pro 3.0** أو أحدث (تم اختبارها واعتمادها حتى **ArcGIS Pro 3.4.x**)
+- برنامج: **ArcGIS Pro 3.3.x أو 3.4.x أو أحدث** (متوافقة تماماً مع كافة إصدارات Pro المبنية على .NET 8)
 - حزمة: **.NET 8.0 Windows Desktop Runtime**
 
 ### خطوات التثبيت:
