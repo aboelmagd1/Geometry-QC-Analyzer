@@ -1,9 +1,9 @@
 <ArcGIS defaultAssembly="GeometryQCAddIn.dll" defaultNamespace="GeometryQCAddIn" xmlns="http://schemas.esri.com/DADF/Registry" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://schemas.esri.com/DADF/Registry file:///C:/Program%20Files/ArcGIS/Pro/bin/ArcGIS.Desktop.Framework.xsd">
-  <AddInInfo id="{8a7f921d-44a3-4b92-95f2-953e5e6080dc}" version="1.0.5" author="GIS Team" desktopVersion="3.3">
+  <AddInInfo id="{8a7f921d-44a3-4b92-95f2-953e5e6080dc}" version="1.0.5" author="Created by Mahmoud Aboelmagd with AI" desktopVersion="3.3">
     <Name>Geometry QC Analyzer</Name>
     <Description>High-performance, read-only Polygon Geometry Quality Control Analyzer for ArcGIS Pro.</Description>
     <Image>Images\AddinDesktop32.png</Image>
-    <Author>GIS Quality Engineering</Author>
+    <Author>Created by Mahmoud Aboelmagd with AI</Author>
     <Company>ArcGIS Pro Solutions</Company>
     <Date>2026-09-13</Date>
     <Subject>Geometry Quality Control</Subject>

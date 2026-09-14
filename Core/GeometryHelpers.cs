@@ -68,6 +68,25 @@ namespace GeometryQCAddIn.Core
                     return true;
                 }
 
+                var dataConn = layer.GetDataConnection();
+                if (dataConn != null)
+                {
+                    string typeName = dataConn.GetType().Name;
+                    if (typeName.IndexOf("Service", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        typeName.IndexOf("AGS", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return true;
+                    }
+
+                    if (dataConn is ArcGIS.Core.CIM.CIMStandardDataConnection sdc &&
+                        !string.IsNullOrEmpty(sdc.WorkspaceConnectionString) &&
+                        (sdc.WorkspaceConnectionString.IndexOf("Service", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         sdc.WorkspaceConnectionString.IndexOf("http", StringComparison.OrdinalIgnoreCase) >= 0))
+                    {
+                        return true;
+                    }
+                }
+
                 using (var fc = layer.GetFeatureClass())
                 {
                     if (fc != null)

@@ -74,6 +74,31 @@ namespace GeometryQCAddIn.Core
                                 if (row is Feature feature)
                                 {
                                     var shape = feature.GetShape() as Polygon;
+                                    if ((shape == null || shape.IsEmpty) && settings.EnableForServiceLayers)
+                                    {
+                                        try
+                                        {
+                                            var qf = new QueryFilter { ObjectIDs = new[] { feature.GetObjectID() } };
+                                            using (var directCursor = layer.Search(qf))
+                                            {
+                                                if (directCursor.MoveNext())
+                                                {
+                                                    using (var directRow = directCursor.Current)
+                                                    {
+                                                        if (directRow is Feature directFeature)
+                                                        {
+                                                            shape = directFeature.GetShape() as Polygon;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        catch
+                                        {
+                                            // Non-fatal query fallback failure
+                                        }
+                                    }
+
                                     if (shape == null || shape.IsEmpty)
                                     {
                                         result.UnavailableGeometriesCount++;

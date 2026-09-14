@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Windows.Media;
 using ArcGIS.Desktop.Framework;
 using ArcGIS.Desktop.Framework.Contracts;
 using ArcGIS.Desktop.Framework.Threading.Tasks;
@@ -21,13 +22,52 @@ namespace GeometryQCAddIn.UI
     public class IssueGroupViewModel
     {
         public string CheckName { get; }
+        public string CheckId { get; }
         public int Count => Issues.Count;
         public ObservableCollection<IssueResult> Issues { get; }
+        public SolidColorBrush SymbolBrush { get; }
+        public string TooltipText => $"{CheckName} ({Count} issues) - Map Symbol Color";
 
         public IssueGroupViewModel(string checkName, IEnumerable<IssueResult> issues)
         {
             CheckName = checkName;
             Issues = new ObservableCollection<IssueResult>(issues);
+            var firstIssue = Issues.FirstOrDefault();
+            CheckId = firstIssue?.CheckId ?? string.Empty;
+            SymbolBrush = GetBrushForIssue(CheckId, checkName);
+        }
+
+        public static SolidColorBrush GetBrushForIssue(string checkId, string checkName)
+        {
+            var id = checkId?.ToUpperInvariant() ?? string.Empty;
+            var name = checkName?.ToUpperInvariant() ?? string.Empty;
+
+            SolidColorBrush brush;
+            if (id == "CHK_INVALID_GEOM" || name.Contains("INVALID"))
+                brush = new SolidColorBrush(Color.FromRgb(160, 32, 240)); // Purple
+            else if (id == "CHK_OVERLAP" || name.Contains("OVERLAP"))
+                brush = new SolidColorBrush(Color.FromRgb(255, 0, 0)); // Red
+            else if (id == "CHK_DUPLICATE" || name.Contains("DUPLICATE"))
+                brush = new SolidColorBrush(Color.FromRgb(139, 0, 0)); // Dark Red / Maroon
+            else if (id == "CHK_GAP" || name.Contains("GAP"))
+                brush = new SolidColorBrush(Color.FromRgb(255, 165, 0)); // Amber / Orange
+            else if (id == "CHK_MULTIPART" || name.Contains("MULTI"))
+                brush = new SolidColorBrush(Color.FromRgb(255, 140, 0)); // Orange
+            else if (id == "CHK_SHORT_SEG" || name.Contains("SHORT"))
+                brush = new SolidColorBrush(Color.FromRgb(0, 120, 255)); // Vivid Blue
+            else if (id == "CHK_ANGLE" || name.Contains("ANGLE"))
+                brush = new SolidColorBrush(Color.FromRgb(0, 220, 220)); // Cyan
+            else if (id == "CHK_SNAP" || name.Contains("SNAP"))
+                brush = new SolidColorBrush(Color.FromRgb(30, 144, 255)); // Dodger Blue
+            else if (id == "CHK_REDUNDANT" || name.Contains("REDUNDANT"))
+                brush = new SolidColorBrush(Color.FromRgb(128, 128, 128)); // Gray
+            else if (id == "CHK_JUNCTION" || name.Contains("JUNCTION"))
+                brush = new SolidColorBrush(Color.FromRgb(255, 0, 255)); // Magenta
+            else
+                brush = new SolidColorBrush(Color.FromRgb(255, 69, 0)); // Default Red-Orange
+
+            brush.Freeze();
+            return brush;
         }
     }
 

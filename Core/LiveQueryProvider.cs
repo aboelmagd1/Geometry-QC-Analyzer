@@ -71,9 +71,23 @@ namespace GeometryQCAddIn.Core
                         string shapeFieldName = fcDef.GetShapeField();
                         string oidFieldName = fcDef.GetObjectIDField();
 
+                        Geometry? filterGeom = extent;
+                        try
+                        {
+                            var fcSr = fcDef.GetSpatialReference();
+                            if (extent != null && fcSr != null && extent.SpatialReference != null && !extent.SpatialReference.IsEqual(fcSr))
+                            {
+                                filterGeom = GeometryEngine.Instance.Project(extent, fcSr);
+                            }
+                        }
+                        catch
+                        {
+                            // Fallback to unprojected extent
+                        }
+
                         var spatialFilter = new SpatialQueryFilter
                         {
-                            FilterGeometry = extent,
+                            FilterGeometry = filterGeom,
                             SpatialRelationship = SpatialRelationship.Intersects,
                             ObjectIDs = oids,
                             SubFields = $"{oidFieldName},{shapeFieldName}"
