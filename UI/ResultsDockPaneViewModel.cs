@@ -149,10 +149,13 @@ namespace GeometryQCAddIn.UI
         }
 
         public ICommand RunQCCommand { get; }
+        public ICommand ExportErrorsCommand { get; }
         public ICommand ClearResultsCommand { get; }
         public ICommand CancelCommand { get; }
         public ICommand ZoomToIssueCommand { get; }
         public ICommand RefreshLayersCommand { get; }
+
+        private List<IssueResult> _currentIssues = new List<IssueResult>();
 
         public ResultsDockPaneViewModel()
         {
@@ -160,6 +163,7 @@ namespace GeometryQCAddIn.UI
             _selectedLayer = _availableLayers[0];
 
             RunQCCommand = new RelayCommand(async () => await RunValidationAsync(), () => !IsBusy);
+            ExportErrorsCommand = new RelayCommand(async () => await ExportErrorsToGdbAsync(), () => !IsBusy && TotalIssuesCount > 0);
             ClearResultsCommand = new RelayCommand(ClearResults);
             CancelCommand = new RelayCommand(CancelExecution, () => IsBusy);
             RefreshLayersCommand = new RelayCommand(async () => await RefreshLayersAsync());
@@ -289,6 +293,7 @@ namespace GeometryQCAddIn.UI
                     .Select(g => new IssueGroupViewModel(g.Key, g))
                     .ToList();
 
+                _currentIssues = result.Issues;
                 IssueGroups = new ObservableCollection<IssueGroupViewModel>(groups);
                 TotalIssuesCount = result.Issues.Count;
 
@@ -333,12 +338,71 @@ namespace GeometryQCAddIn.UI
         public void ClearResults()
         {
             CancelExecution();
+            _currentIssues.Clear();
             IssueGroups.Clear();
             TotalIssuesCount = 0;
             SelectedIssue = null;
             StatusText = "Results cleared. Ready for next analysis.";
             MetricsText = string.Empty;
             QCGraphicManager.Instance.ClearGraphics();
+        }
+
+        public async Task ExportErrorsToGdbAsync()
+        {
+            if (IsBusy) return;
+
+            var issuesToExport = _currentIssues.Count > 0 
+                ? _currentIssues 
+                : IssueGroups.SelectMany(g => g.Issues).ToList();
+
+            if (issuesToExport.Count == 0)
+            {
+                StatusText = "No QC issues to export.";
+                return;
+            }
+
+            IsBusy = true;
+            StatusText = "Preparing to export errors to Default Geodatabase...";
+            ProgressPercent = 15;
+
+            try
+            {
+                var progressReporter = new Progress<string>(status =>
+                {
+                    StatusText = status;
+                });
+
+                var exportResult = await GdbExportService.ExportErrorsToDefaultGdbAsync(issuesToExport, null, progressReporter);
+
+                if (exportResult.Success)
+                {
+                    StatusText = exportResult.Message;
+                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
+                        $"Successfully exported {exportResult.TotalFeaturesExported} errors across {exportResult.FeatureClassCount} feature classes to dataset:\n\n'{exportResult.DatasetName}'\n\nInside Default Geodatabase:\n{exportResult.GdbPath}\n\nLayers have been added to the active map.",
+                        "QC Errors Export Complete",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                }
+                else
+                {
+                    StatusText = $"Export failed: {exportResult.Message}";
+                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
+                        $"Failed to export QC errors:\n\n{exportResult.Message}",
+                        "Export Error",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"Export error: {ex.Message}";
+                LoggingService.Error($"Export error: {ex}");
+            }
+            finally
+            {
+                IsBusy = false;
+                ProgressPercent = 0;
+            }
         }
 
         private async Task ZoomToIssueAsync(IssueResult issue)

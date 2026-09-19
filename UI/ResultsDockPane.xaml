@@ -128,10 +128,12 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="1.15*"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" Content="Run QC" Command="{Binding RunQCCommand}" Style="{DynamicResource TurquoiseActionButtonStyle}" Margin="0,0,4,0" Height="30"/>
-                <Button Grid.Column="1" Content="Clear Results" Command="{Binding ClearResultsCommand}" Style="{DynamicResource BlueActionButtonStyle}" Margin="4,0,0,0" Height="30"/>
+                <Button Grid.Column="0" Content="Run QC" Command="{Binding RunQCCommand}" Style="{DynamicResource TurquoiseActionButtonStyle}" Margin="0,0,3,0" Height="30"/>
+                <Button Grid.Column="1" Content="Export to GDB" Command="{Binding ExportErrorsCommand}" Style="{DynamicResource EmeraldActionButtonStyle}" Margin="3,0,3,0" Height="30" ToolTip="Export all issues into dataset 'QC_Errors' in Default Geodatabase"/>
+                <Button Grid.Column="2" Content="Clear Results" Command="{Binding ClearResultsCommand}" Style="{DynamicResource BlueActionButtonStyle}" Margin="3,0,0,0" Height="30"/>
             </Grid>
         </Border>
     </Grid>
