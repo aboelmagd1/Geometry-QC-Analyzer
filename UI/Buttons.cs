@@ -1,4 +1,5 @@
 using System;
+using System.Windows.Media.Imaging;
 using ArcGIS.Desktop.Framework;
 using ArcGIS.Desktop.Framework.Contracts;
 using ArcGIS.Desktop.Framework.Dialogs;
@@ -16,6 +17,15 @@ namespace GeometryQCAddIn.UI
         public RunQCButton()
         {
             Enabled = true;
+            try
+            {
+                LargeImage = new BitmapImage(new Uri("pack://application:,,,/GeometryQCAddIn;component/Images/QC_Run32.png", UriKind.Absolute));
+                SmallImage = new BitmapImage(new Uri("pack://application:,,,/GeometryQCAddIn;component/Images/QC_Run16.png", UriKind.Absolute));
+            }
+            catch
+            {
+                // Fallback to Config.daml declaration
+            }
         }
 
         protected override async void OnClick()
@@ -45,14 +55,18 @@ namespace GeometryQCAddIn.UI
         public ToggleQCButton()
         {
             Enabled = true;
+            bool isEnabled = true;
             try
             {
-                IsChecked = GeometryQCSettings.Instance.IsEnabled;
+                isEnabled = GeometryQCSettings.Instance.IsEnabled;
             }
             catch
             {
-                IsChecked = true;
+                isEnabled = true;
             }
+
+            IsChecked = isEnabled;
+            UpdateAppearance(isEnabled);
         }
 
         protected override void OnClick()
@@ -63,11 +77,48 @@ namespace GeometryQCAddIn.UI
                 settings.IsEnabled = !settings.IsEnabled;
                 settings.Save();
                 IsChecked = settings.IsEnabled;
+                UpdateAppearance(settings.IsEnabled);
             }
             catch (Exception ex)
             {
                 LoggingService.Error("ToggleQCButton error", ex);
                 MessageBox.Show($"Error toggling QC: {ex.Message}", "Geometry QC");
+            }
+        }
+
+        protected override void OnUpdate()
+        {
+            try
+            {
+                var isEnabled = GeometryQCSettings.Instance?.IsEnabled ?? false;
+                if (IsChecked != isEnabled)
+                {
+                    IsChecked = isEnabled;
+                    UpdateAppearance(isEnabled);
+                }
+            }
+            catch
+            {
+            }
+            Enabled = true;
+        }
+
+        private void UpdateAppearance(bool isEnabled)
+        {
+            Caption = isEnabled ? "QC (ON)" : "QC (OFF)";
+            Tooltip = isEnabled
+                ? "Geometry QC is active. Click to disable automatic/interactive checks."
+                : "Geometry QC is disabled. Click to enable.";
+
+            try
+            {
+                string suffix = isEnabled ? "ON" : "OFF";
+                LargeImage = new BitmapImage(new Uri($"pack://application:,,,/GeometryQCAddIn;component/Images/QC_Toggle_{suffix}32.png", UriKind.Absolute));
+                SmallImage = new BitmapImage(new Uri($"pack://application:,,,/GeometryQCAddIn;component/Images/QC_Toggle_{suffix}16.png", UriKind.Absolute));
+            }
+            catch
+            {
+                // Fallback to Config.daml declaration
             }
         }
     }
@@ -80,6 +131,15 @@ namespace GeometryQCAddIn.UI
         public SettingsButton()
         {
             Enabled = true;
+            try
+            {
+                LargeImage = new BitmapImage(new Uri("pack://application:,,,/GeometryQCAddIn;component/Images/QC_Settings32.png", UriKind.Absolute));
+                SmallImage = new BitmapImage(new Uri("pack://application:,,,/GeometryQCAddIn;component/Images/QC_Settings16.png", UriKind.Absolute));
+            }
+            catch
+            {
+                // Fallback to Config.daml declaration
+            }
         }
 
         protected override void OnClick()
@@ -104,6 +164,15 @@ namespace GeometryQCAddIn.UI
         public ResultsButton()
         {
             Enabled = true;
+            try
+            {
+                LargeImage = new BitmapImage(new Uri("pack://application:,,,/GeometryQCAddIn;component/Images/QC_Results32.png", UriKind.Absolute));
+                SmallImage = new BitmapImage(new Uri("pack://application:,,,/GeometryQCAddIn;component/Images/QC_Results16.png", UriKind.Absolute));
+            }
+            catch
+            {
+                // Fallback to Config.daml declaration
+            }
         }
 
         protected override void OnClick()
@@ -128,6 +197,15 @@ namespace GeometryQCAddIn.UI
         public ClearResultsButton()
         {
             Enabled = true;
+            try
+            {
+                LargeImage = new BitmapImage(new Uri("pack://application:,,,/GeometryQCAddIn;component/Images/QC_Clear32.png", UriKind.Absolute));
+                SmallImage = new BitmapImage(new Uri("pack://application:,,,/GeometryQCAddIn;component/Images/QC_Clear16.png", UriKind.Absolute));
+            }
+            catch
+            {
+                // Fallback to Config.daml declaration
+            }
         }
 
         protected override void OnClick()
@@ -160,6 +238,15 @@ namespace GeometryQCAddIn.UI
         public CancelQCButton()
         {
             Enabled = true;
+            try
+            {
+                LargeImage = new BitmapImage(new Uri("pack://application:,,,/GeometryQCAddIn;component/Images/QC_Cancel32.png", UriKind.Absolute));
+                SmallImage = new BitmapImage(new Uri("pack://application:,,,/GeometryQCAddIn;component/Images/QC_Cancel16.png", UriKind.Absolute));
+            }
+            catch
+            {
+                // Fallback to Config.daml declaration
+            }
         }
 
         protected override void OnClick()

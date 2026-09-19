@@ -56,6 +56,7 @@
     <None Update="Images\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <Resource Include="Images\**\*.png" />
   </ItemGroup>
 
   <Target Name="PackageArcGISProAddIn" AfterTargets="Build">
