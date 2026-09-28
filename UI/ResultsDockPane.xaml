@@ -44,16 +44,35 @@
 
         <!-- Target Layer Selector Card -->
         <Border Grid.Row="1" Background="{DynamicResource CardBackgroundBrush}" Margin="6,6,6,2" Padding="10,6" CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Layer:" Style="{DynamicResource BodyTextStyle}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableLayers}" SelectedItem="{Binding SelectedLayer}" DisplayMemberPath="DisplayName" Height="26" VerticalContentAlignment="Center" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource PrimaryTextBrush}" BorderBrush="{DynamicResource BorderBrush}" DropDownOpened="LayerComboBox_DropDownOpened"/>
-                <Button Grid.Column="2" Command="{Binding RefreshLayersCommand}" Style="{DynamicResource BlueActionButtonStyle}" ToolTip="Refresh Map Layers" Margin="6,0,0,0" Padding="8,2" Content="↻" FontSize="13" VerticalAlignment="Center" Height="26"/>
-            </Grid>
+            <StackPanel Orientation="Vertical">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Layer:" Style="{DynamicResource BodyTextStyle}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableLayers}" SelectedItem="{Binding SelectedLayer}" DisplayMemberPath="DisplayName" Height="26" VerticalContentAlignment="Center" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource PrimaryTextBrush}" BorderBrush="{DynamicResource BorderBrush}" DropDownOpened="LayerComboBox_DropDownOpened"/>
+                    <Button Grid.Column="2" Command="{Binding RefreshLayersCommand}" Style="{DynamicResource BlueActionButtonStyle}" ToolTip="Refresh Map Layers" Margin="6,0,0,0" Padding="8,2" Content="↻" FontSize="13" VerticalAlignment="Center" Height="26"/>
+                </Grid>
+                
+                <!-- Active Data Source Mode Indicator -->
+                <Grid Margin="0,5,0,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Mode: " Style="{DynamicResource SecondaryTextStyle}" FontSize="10"/>
+                        <TextBlock Text="{Binding CurrentModeDescription}" Style="{DynamicResource BodyTextStyle}" FontWeight="SemiBold" FontSize="10" Foreground="{DynamicResource PrimaryAccentBrush}"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Warning banner if Entire Layer mode lacks a local layer selection -->
+                <TextBlock Text="{Binding LayerSelectionWarningText}" 
+                           Visibility="{Binding HasLayerSelectionWarning, Converter={StaticResource BoolToVis}}" 
+                           Foreground="{DynamicResource SecondaryAccentBrush}" 
+                           FontSize="10" 
+                           FontWeight="Medium" 
+                           TextWrapping="Wrap" 
+                           Margin="0,4,0,0"/>
+            </StackPanel>
         </Border>
 
         <!-- Progress Indicator Card -->

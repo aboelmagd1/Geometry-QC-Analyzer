@@ -37,6 +37,8 @@
                 <TextBlock Text="Data Source Mode:" Style="{DynamicResource BodyTextStyle}" Margin="0,8,0,2"/>
                 <RadioButton Content="Display Cache (In-Memory Selection, Default)" IsChecked="{Binding IsDisplayCacheMode}" Margin="8,2" Foreground="{DynamicResource PrimaryTextBrush}"/>
                 <RadioButton Content="Live Query (Feature Layer Filter)" IsChecked="{Binding IsLiveQueryMode}" Margin="8,2" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                <RadioButton Content="Real Geometry (Selected Features, Ignore Viewport)" IsChecked="{Binding IsRealGeometryMode}" Margin="8,2" Foreground="{DynamicResource PrimaryTextBrush}" ToolTip="Analyzes true geometries directly from the layer for all selected features, even outside viewport"/>
+                <RadioButton Content="Entire Layer (Local Layer Only, All Features)" IsChecked="{Binding IsEntireLayerMode}" Margin="8,2" Foreground="{DynamicResource PrimaryTextBrush}" ToolTip="Analyzes all features in the selected local layer without requiring selection"/>
 
                 <CheckBox Content="Enable for Service Layers" IsChecked="{Binding EnableForServiceLayers}" Margin="0,6,0,3" Foreground="{DynamicResource PrimaryTextBrush}"/>
 

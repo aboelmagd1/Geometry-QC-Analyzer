@@ -35,7 +35,12 @@ Developed with the assistance of **Advanced AI**, it evaluates selected features
 * **⚡ Zero Geodatabase Overhead:** Works directly on selected polygon layers and live Web Feature Services — no need to create Feature Datasets or Geodatabase Topologies.
 * **🔒 100% Safe & Read-Only:** Never modifies, locks, or edits your source geodatabase records during inspection.
 * **🎯 10 Instant QC Checks:** Comprehensive detection of overlaps, gaps, sub-millimeter snap issues, redundant collinear vertices, missing T-junctions, spikes, and invalid geometries.
-* **🧭 Interactive Results DockPane:** Categorized tree view with one-click **Zoom to Issue**, feature OID tracking, and detailed diagnostic metrics.
+* **🎛️ 4 Flexible Data Source Modes:**
+  - **Display Cache (Default):** Ultra-fast screen-rendered geometry cache for visible selection.
+  - **Live Query:** Fresh query filtered by selection and viewport extent.
+  - **Real Geometry (Ignore Viewport):** Direct query of true unclipped geometries from the underlying `FeatureClass` for all selected features, even outside the active viewport.
+  - **Entire Layer (Local Only):** Complete validation of all features in a specified local layer (GDB/Shapefile) without requiring manual feature selection.
+* **🧭 Interactive Results DockPane:** Categorized tree view with one-click **Zoom to Issue**, active mode indicator, layer health warnings, feature OID tracking, and detailed diagnostic metrics.
 * **🎨 Color-Coded Map Overlays:** Temporary graphic overlays on the map highlighting each error type with distinct, vibrant colors.
 * **💾 Export Errors to File Geodatabase (GDB):** One-click export of all detected errors into a dedicated `QC_Errors` Feature Dataset in the project's Default Geodatabase, automatically categorized into feature classes by geometry type with full attributes and added directly to the active map.
 * **📐 Sub-Millimeter Precision:** Reports distances below 1 cm in millimeters (`mm`) up to 3–4 decimal places (e.g., `0.04 mm`), eliminating misleading `0.00 cm` ghost messages.
@@ -88,8 +93,11 @@ Developed with the assistance of **Advanced AI**, it evaluates selected features
 
 ### 💻 Typical Workflow
 
-1. **Select:** Use the standard ArcGIS Pro *Select Tool* to select the polygons you want to validate.
-2. **Choose Layer:** Open the **Results** dockpane and choose your target layer (or *All Polygon Layers*).
+1. **Configure Mode:** In **Settings** (or viewable in the **Results** pane), choose your **Data Source Mode**:
+   - *Display Cache* or *Live Query* (for visible selection).
+   - *Real Geometry* (to validate all selected features including those outside the viewport).
+   - *Entire Layer* (to validate all features in a local layer without selection).
+2. **Select & Target Layer:** Select polygon features (if in selection mode) and choose the target layer in the Results dockpane.
 3. **Run:** Click **Run QC** (Green Play button).
 4. **Inspect:** Browse detected issues by category, click **Zoom** to navigate directly to each error, and fix using standard Pro edit tools.
 5. **Export:** Click **Export to GDB** to persist all error geometries into the Default Geodatabase and display them as feature layers.
@@ -114,7 +122,12 @@ Developed with the assistance of **Advanced AI**, it evaluates selected features
 * **⚡ بدون روتين الـ Topology:** تعمل مباشرة على الطبقات المحلية وعلى طبقات الويب والـ Feature Services دون الحاجة لأي Export.
 * **🔒 قراءة فقط 100% (Read-Only):** أداة آمنة تماماً لا تعدل ولا تقفل قواعد البيانات الأصلية أثناء الفحص.
 * **🎯 10 فحوصات هندسية شاملة:** كشف التداخلات، الفجوات الهوائية، عدم الالتقاط حتى أجزاء الملليمتر، الرؤوس الزائدة على الاستقامة، العقد التبادلية المفقودة، والزوايا الحادة الشاذة.
-* **🧭 لوحة نتائج تفاعلية:** شجرة تصنيفية للأخطاء مع زر **Zoom** للانتقال الفوري وتكبير موقع كل عيب على الخريطة.
+* **🎛️ 4 أنماط مرنة لجلب البيانات (Data Source Modes):**
+  - **Display Cache:** فحص فوري من كاش العرض للمعالم المحددة الظاهرة داخل الـ Viewport.
+  - **Live Query:** استعلام مباشر مقيد بنطاق الشاشة والتحديد الحالي.
+  - **Real Geometry (Ignore Viewport):** فحص الأشكال الهندسية الحقيقية الأصلية من مصدر البيانات (`FeatureClass`) لجميع المعالم المحددة متجاوزاً حدود الشاشة (بغض النظر عن ظهورها في الـ Viewport).
+  - **Entire Layer (Local Only):** فحص شامل لكافة معالم الطبقة دون اشتراط التحديد، ومقتصر بدقة وأمان على الطبقات المحلية (Geodatabase, Shapefile).
+* **🧭 لوحة نتائج تفاعلية:** شجرة تصنيفية للأخطاء مع مؤشر للنمط النشط، تنبيهات لسلامة اختيار الطبقات، وزر **Zoom** للانتقال الفوري وتكبير موقع كل عيب على الخريطة.
 * **🎨 رسومات توضيحية ملونة:** تمييز بصري فوق الخريطة بألوان مميزة لكل نوع خطأ (تداخل بالأحمر، عدم التقاط بالأزرق، فجوات بالأصفر... إلخ).
 * **💾 تصدير الأخطاء لقاعدة بيانات جغرافية (Export to GDB):** إمكانية تصدير كافة الأخطاء المكتشفة بضغطة زر إلى Feature Dataset مستقل باسم `QC_Errors` داخل الـ Default Geodatabase للمشروع، مقسمة إلى Feature Classes بحسب نوع وشكل الخطأ مع كامل البيانات الوصفية وإضافتها للخريطة تلقائياً.
 * **📐 دقة فائقة تحت الملليمتر:** قياس المسافات الأقل من 1 سنتيمتر بوحدة الملليمتر (`mm`) بدقة حتى 3 و4 خانات عشرية (مثل `0.04 mm`) لمنع الرسائل الوهمية `0.00 cm`.

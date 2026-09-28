@@ -53,11 +53,13 @@ QC Preview V01/
 │   │   ├── RedundantVertexCheck.cs            # CHK_REDUNDANT (Junction Guard)
 │   │   └── JunctionVertexCheck.cs             # CHK_JUNCTION (T-Junctions)
 │   ├── DisplayCacheProvider.cs                # Ultra-fast viewport display cache reader
+│   ├── EntireLayerProvider.cs                 # Full local layer provider (all features, no selection required)
 │   ├── GeometryDataProvider.cs                # Base provider abstraction
 │   ├── GeometryHelpers.cs                     # Angle calculation & sub-millimeter metrics
 │   ├── GeometryQCContext.cs                   # Execution context (Spatial Reference, Index, Features)
 │   ├── GeometryValidator.cs                   # Orchestrator & Deduplication engine
-│   ├── LiveQueryProvider.cs                   # Fresh layer query provider via SearchCursor
+│   ├── LiveQueryProvider.cs                   # Fresh layer query provider via SearchCursor (extent-filtered)
+│   ├── RealGeometryProvider.cs                # Direct FeatureClass reader for selected features (ignores viewport)
 │   ├── SpatialIndex.cs                        # 2D Bounding-Box Grid Spatial Hash
 │   ├── UnitConverter.cs                       # Coordinate unit normalization (metric/degrees)
 │   └── VertexIndex.cs                         # Sub-millimeter Point Spatial Hash
@@ -143,8 +145,10 @@ QC Preview V01/
    - Indexes all vertices across polygon rings using spatial hashing with cell size equal to tolerance (e.g., 1 cm).
    - Allows instant $O(1)$ neighborhood vertex queries for sub-millimeter snap checks and junction detection.
 3. **Data Providers (`GeometryDataProvider.cs`):**
-   - **`DisplayCacheProvider`:** Reads rendered screen graphics directly from ArcGIS Pro MapView display cache for instant preview.
-   - **`LiveQueryProvider`:** Uses `FeatureClass.Search(...)` within `QueuedTask` for rigorous validation of attributes and complete geometries.
+   - **`DisplayCacheProvider`:** Reads rendered screen graphics directly from ArcGIS Pro MapView display cache for instant preview of selected features within viewport.
+   - **`LiveQueryProvider`:** Uses `FeatureClass.Search(...)` within `QueuedTask` constrained by map view extent and selection.
+   - **`RealGeometryProvider`:** Queries true, unclipped geometries directly from underlying `FeatureClass` for all selected features in safe batches of 1000 OIDs, regardless of whether they are visible in the active viewport.
+   - **`EntireLayerProvider`:** Queries all polygon features across a specified local layer (Geodatabase, Shapefile) without requiring selection. Strictly enforces local data source safety (`!GeometryHelpers.IsServiceLayer(layer)`) and prevents running without a target layer.
 
 ---
 
@@ -254,11 +258,17 @@ Each check implements `IGeometryCheck` and executes asynchronously with a `Cance
 ## 2. الهيكلية المعمارية للمجلدات والكود
 
 1. **`Config.daml`:** ملف التكوين الإعلاني لـ ArcGIS Pro متوافق تماماً مع مخطط `http://Config.xsd` وضبط `desktopVersion="3.0"` وتفعيل `autoLoad="true"`.
-2. **`Core/Checks/`:** مجلد الفحوصات الهندسية العشرة المستقلة المشتقة من واجهة `IGeometryCheck`.
-3. **`Core/SpatialIndex.cs` & `VertexIndex.cs`:** محركات الفهرسة المكانية بالذاكرة لتسريع المقارنات من $O(N^2)$ إلى سرعات لحظية.
-4. **`Services/GdbExportService.cs`:** خدمة تصدير الأخطاء إلى قاعدة البيانات الافتراضية داخل Feature Dataset مخصص باسم `QC_Errors`.
-5. **`UI/ResultsDockPane` & `SettingsDockPane`:** لوحات التحكم الجانبية المبنية بتقنية WPF مع دعم المظهر الفاتح والداكن.
-6. **`package.ps1` & `csproj`:** سكريبتات التجميع والنشر التلقائي لمجلد إضافات المستخدم مع مسح كاش الـ `AssemblyCache`.
+2. **`Core/`:** محركات الفحص ومزودات جلب البيانات:
+   - `DisplayCacheProvider.cs`: كاش العرض اللحظي فائق السرعة للتحديد داخل الشاشة.
+   - `LiveQueryProvider.cs`: استعلام مباشر من الطبقة مقيد بنطاق الشاشة والتحديد.
+   - `RealGeometryProvider.cs`: استعلام الأشكال الهندسية الحقيقية الأصلية للتحديد كاملاً دون تقييد بنطاق الشاشة (Ignore Viewport).
+   - `EntireLayerProvider.cs`: فحص كامل معالم الطبقة دون اشتراط التحديد، مقتصر على الطبقات المحلية (Local Geodatabases / Shapefiles).
+   - `GeometryValidator.cs`: محرك التنسيق واقتطاع التقاطعات وإزالة التكرار.
+3. **`Core/Checks/`:** مجلد الفحوصات الهندسية العشرة المستقلة المشتقة من واجهة `IGeometryCheck`.
+4. **`Core/SpatialIndex.cs` & `VertexIndex.cs`:** محركات الفهرسة المكانية بالذاكرة لتسريع المقارنات من $O(N^2)$ إلى سرعات لحظية.
+5. **`Services/GdbExportService.cs`:** خدمة تصدير الأخطاء إلى قاعدة البيانات الافتراضية داخل Feature Dataset مخصص باسم `QC_Errors`.
+6. **`UI/ResultsDockPane` & `SettingsDockPane`:** لوحات التحكم الجانبية المبنية بتقنية WPF مع مؤشر النمط وتنبيهات الطبقات ودعم المظهر الفاتح والداكن.
+7. **`package.ps1` & `csproj`:** سكريبتات التجميع والنشر التلقائي لمجلد إضافات المستخدم مع مسح كاش الـ `AssemblyCache`.
 
 ---
 

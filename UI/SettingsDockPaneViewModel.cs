@@ -34,8 +34,7 @@ namespace GeometryQCAddIn.UI
                 if (value)
                 {
                     _settings.DataSource = DataSourceMode.DisplayCache;
-                    NotifyPropertyChanged();
-                    NotifyPropertyChanged(nameof(IsLiveQueryMode));
+                    NotifyDataSourceProperties();
                     SaveSettings();
                 }
             }
@@ -49,11 +48,50 @@ namespace GeometryQCAddIn.UI
                 if (value)
                 {
                     _settings.DataSource = DataSourceMode.LiveQuery;
-                    NotifyPropertyChanged();
-                    NotifyPropertyChanged(nameof(IsDisplayCacheMode));
+                    NotifyDataSourceProperties();
                     SaveSettings();
                 }
             }
+        }
+
+        public bool IsRealGeometryMode
+        {
+            get => _settings.DataSource == DataSourceMode.RealGeometry;
+            set
+            {
+                if (value)
+                {
+                    _settings.DataSource = DataSourceMode.RealGeometry;
+                    NotifyDataSourceProperties();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public bool IsEntireLayerMode
+        {
+            get => _settings.DataSource == DataSourceMode.EntireLayer;
+            set
+            {
+                if (value)
+                {
+                    _settings.DataSource = DataSourceMode.EntireLayer;
+                    NotifyDataSourceProperties();
+                    SaveSettings();
+                }
+            }
+        }
+
+        private void NotifyDataSourceProperties()
+        {
+            NotifyPropertyChanged(nameof(IsDisplayCacheMode));
+            NotifyPropertyChanged(nameof(IsLiveQueryMode));
+            NotifyPropertyChanged(nameof(IsRealGeometryMode));
+            NotifyPropertyChanged(nameof(IsEntireLayerMode));
+
+            // Notify Results dockpane if active
+            var resultsVm = FrameworkApplication.DockPaneManager?.Find(ResultsDockPaneViewModel.DockPaneId) as ResultsDockPaneViewModel;
+            resultsVm?.NotifyModeChanged();
         }
 
         public bool EnableForServiceLayers

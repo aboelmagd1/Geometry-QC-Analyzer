@@ -74,9 +74,13 @@ namespace GeometryQCAddIn.Core
                 var swAcquisition = Stopwatch.StartNew();
 
                 // Step 1: Data Acquisition based on configured DataSource Mode
-                GeometryDataProvider provider = settings.DataSource == DataSourceMode.LiveQuery
-                    ? new LiveQueryProvider()
-                    : new DisplayCacheProvider();
+                GeometryDataProvider provider = settings.DataSource switch
+                {
+                    DataSourceMode.LiveQuery => new LiveQueryProvider(),
+                    DataSourceMode.RealGeometry => new RealGeometryProvider(),
+                    DataSourceMode.EntireLayer => new EntireLayerProvider(),
+                    _ => new DisplayCacheProvider()
+                };
 
                 var acqResult = await provider.AcquireFeaturesAsync(mapView, settings, targetLayerUri, cancellationToken);
                 swAcquisition.Stop();
@@ -92,9 +96,24 @@ namespace GeometryQCAddIn.Core
                 {
                     stats.EndTime = DateTime.Now;
                     result.Succeeded = true;
-                    result.Message = acqResult.TotalSelectedCount == 0
-                        ? "No polygon features selected. Please select one or more polygon features and run QC."
-                        : "Selected polygon features are outside current map view extent.";
+                    if (settings.DataSource == DataSourceMode.EntireLayer)
+                    {
+                        result.Message = acqResult.Warnings.Count > 0
+                            ? acqResult.Warnings[0]
+                            : "The selected layer contains no polygon features to analyze.";
+                    }
+                    else if (settings.DataSource == DataSourceMode.RealGeometry)
+                    {
+                        result.Message = acqResult.TotalSelectedCount == 0
+                            ? "No polygon features selected. Please select one or more polygon features and run QC."
+                            : "Selected features had empty or unreadable geometry in the data source.";
+                    }
+                    else
+                    {
+                        result.Message = acqResult.TotalSelectedCount == 0
+                            ? "No polygon features selected. Please select one or more polygon features and run QC."
+                            : "Selected polygon features are outside current map view extent.";
+                    }
                     LoggingService.Info(result.Message);
                     return result;
                 }

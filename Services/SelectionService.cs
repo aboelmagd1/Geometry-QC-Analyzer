@@ -32,7 +32,7 @@ namespace GeometryQCAddIn.Services
         private void OnMapSelectionChanged(MapSelectionChangedEventArgs args)
         {
             var settings = GeometryQCSettings.Instance;
-            if (!settings.IsEnabled || settings.ExecutionMode != ExecutionMode.Auto)
+            if (!settings.IsEnabled || settings.ExecutionMode != ExecutionMode.Auto || settings.DataSource == DataSourceMode.EntireLayer)
             {
                 return;
             }

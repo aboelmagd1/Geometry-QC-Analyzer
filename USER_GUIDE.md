@@ -105,8 +105,11 @@ The **Results DockPane** is located on the right side of the ArcGIS Pro canvas:
 2. **Target Layer Selector:**
    - Dropdown list allowing you to restrict validation to a single layer (e.g., `Parcels`) or select `All Polygon Layers`.
    - Refresh button (`↻`) to update layer list dynamically.
-3. **Execution Mode Selector:**
-   - Toggle between **Display Cache** (ultra-fast screen-rendered geometry cache) and **Live Query** (fetches fresh geometries directly from the layer source).
+3. **Data Source Mode Selector:**
+   - **Display Cache (In-Memory Selection, Default):** Ultra-fast screen-rendered geometry cache for selected features within the current viewport extent.
+   - **Live Query (Feature Layer Filter):** Queries fresh geometries from the data source filtered by the active viewport extent and selection.
+   - **Real Geometry (Selected Features, Ignore Viewport):** Fetches true, unclipped geometries directly from the underlying FeatureClass for all selected features regardless of whether they are visible in the active viewport.
+   - **Entire Layer (Local Layer Only, All Features):** Analyzes all features in the specified local layer without requiring selection. Excludes remote service/web layers for optimal performance and safety. Requires a specific layer to be chosen.
 4. **Issue Categories Tree:**
    - Issues are grouped by check type with color-coded severity badges and issue counts:
      - 🔴 **Errors:** Overlap, Invalid Geometry.
@@ -132,6 +135,7 @@ Allows complete customization of validation sensitivity and thresholds:
 
 | Setting Parameter | Internal Key | Default Value | Description |
 | :--- | :--- | :---: | :--- |
+| **Data Source Mode** | `DataSource` | `DisplayCache` | Choice of 4 modes: `DisplayCache`, `LiveQuery`, `RealGeometry`, or `EntireLayer`. |
 | **Overlap Tolerance** | `OverlapToleranceSqMeters` | `0.0001 m²` (1 cm²) | Minimum intersection area required to report an overlap. |
 | **Gap Tolerance** | `GapToleranceSqMeters` | `0.001 m²` (10 cm²) | Minimum enclosed void area required to flag a gap. |
 | **Short Segment Tolerance** | `ShortSegmentToleranceMeters` | `0.10 m` (10 cm) | Threshold below which polygon segments are flagged. |
@@ -140,7 +144,7 @@ Allows complete customization of validation sensitivity and thresholds:
 | **Redundant Vertex Angle** | `RedundantVertexAngleTolerance` | `179.9°` | Angles approaching 180° flagged as redundant collinear points. |
 | **Junction Tolerance** | `JunctionDistanceToleranceMeters` | `0.10 m` (10 cm) | Distance threshold for detecting missing T-junction vertices. |
 | **Individual Check Toggles** | `IsCheckEnabled_*` | `true` | Individual check-boxes to enable or disable each of the 10 checks. |
-| **Restore Defaults** | — | — | One-click reset to factory standard tolerances. |
+| **Restore Defaults** | — | — | One-click reset to factory standard tolerances and Display Cache mode. |
 
 ---
 
@@ -156,7 +160,12 @@ The Target Layer feature prevents false positive error detection across unrelate
 
 1. **How to use:** Select a specific polygon layer (e.g., `Parcels`) or select **`All Polygon Layers`**.
 2. **Refresh Button (`↻`):** Immediately queries the active map to refresh the dropdown without reopening the pane.
-3. **Benefit:** Prevents reporting false overlaps between layers that are expected to overlap (e.g., parcels overlapping with zoning or administrative boundary layers).
+3. **Local vs. Service Layer Identification:** Remote web/service layers are automatically detected and labeled with a `(Service)` suffix in the dropdown.
+4. **Active Mode Indicator:** Directly below the dropdown, the pane displays the currently active Data Source Mode (e.g., `Mode: Real Geometry (All Selected, Ignore Viewport)`).
+5. **Entire Layer Safety Warnings:** If **Entire Layer** mode is enabled:
+   - Selecting `All Polygon Layers` displays an inline warning: `⚠️ Entire Layer mode requires selecting a specific local polygon layer.`
+   - Selecting a layer with the `(Service)` suffix displays an inline warning: `⚠️ Selected layer is a Service layer. Entire Layer requires a local layer.`
+   - The validation runner strictly blocks execution and prompts the user if these conditions are violated, protecting web services from heavy queries.
 
 ---
 
@@ -259,13 +268,14 @@ The Add-in includes a native **Export to GDB** service (`GdbExportService.cs`) t
 [Clear Results & Re-run QC to Verify Fixes]
 ```
 
-1. **Select:** In ArcGIS Pro, select the polygon features you wish to inspect (or leave unselected to validate visible extent).
-2. **Configure:** Open **Results DockPane**, pick the target layer from the dropdown.
-3. **Execute:** Click **Run QC** (Green Play button).
-4. **Navigate:** Expand the categories, click any issue, and use **Zoom** to center on the defect.
-5. **Archive / Report:** Click **Export to GDB** to generate official GIS layers of the errors.
-6. **Remediate:** Use standard ArcGIS Pro editing tools (Reshape, Align, Split, Merge, Snap) to fix the defects.
-7. **Verify:** Click **Clear Results** and re-run QC to verify all issues have been resolved.
+1. **Mode Setup:** Choose the desired **Data Source Mode** in Settings (Display Cache, Live Query, Real Geometry, or Entire Layer).
+2. **Select:** In ArcGIS Pro, select the polygon features you wish to inspect (or leave unselected if using Entire Layer mode).
+3. **Configure Layer:** Open **Results DockPane**, pick the target layer from the dropdown (required for Entire Layer mode).
+4. **Execute:** Click **Run QC** (Green Play button).
+5. **Navigate:** Expand the categories, click any issue, and use **Zoom** to center on the defect.
+6. **Archive / Report:** Click **Export to GDB** to generate official GIS layers of the errors.
+7. **Remediate:** Use standard ArcGIS Pro editing tools (Reshape, Align, Split, Merge, Snap) to fix the defects.
+8. **Verify:** Click **Clear Results** and re-run QC to verify all issues have been resolved.
 
 ---
 
@@ -384,7 +394,11 @@ The Add-in includes a native **Export to GDB** service (`GdbExportService.cs`) t
 تقع على يمين شاشة ArcGIS Pro وتتضمن:
 1. **الترويسة والعدادات الإحصائية:** تعرض عدد المعالم المفحوصة والزمن المستغرق بالثواني.
 2. **محدد الطبقة المستهدفة (Target Layer Selector):** لاختيار طبقة محددة للفحص (مثل `Parcels`) أو فحص جميع الطبقات (`All Polygon Layers`)، مع زر التحديث السريع (`↻`).
-3. **محدد طريقة جلب البيانات (Execution Mode):** التبديل بين **Display Cache** (كاش العرض اللحظي فائق السرعة) و **Live Query** (الاستعلام المباشر من مصدر البيانات).
+3. **محدد طريقة جلب البيانات (Data Source Mode):**
+   - **Display Cache (In-Memory Selection, Default):** كاش العرض اللحظي فائق السرعة للمعالم المحددة داخل إطار العرض الحالي (Viewport).
+   - **Live Query (Feature Layer Filter):** استعلام مباشر من مصدر البيانات محكوم بنطاق إطار العرض والتحديد.
+   - **Real Geometry (Selected Features, Ignore Viewport):** فحص الأشكال الهندسية الحقيقية الكاملة من مصدر البيانات (`FeatureClass`) لجميع المعالم المحددة بغض النظر عما إذا كانت ظاهرة داخل إطار العرض أو خارجه.
+   - **Entire Layer (Local Layer Only, All Features):** فحص كامل الطبقة لجميع المعالم دون اشتراط وجود تحديد مسبق، ومقتصر بدقة على الطبقات المحلية (Geodatabase, Shapefile) مع اشتراط تحديد طبقة معينة لمنع الفحص العشوائي على الطبقات الخدمية أو الشبكية.
 4. **شجرة تصنيف الأخطاء (Issues Tree View):** تصنيف الأخطاء في مجموعات مع شارات لونية وعدد الأخطاء:
    - 🔴 **الأخطاء الحرجة (Errors):** Overlap, Invalid Geometry.
    - 🟠 **التحذيرات (Warnings):** Gap, Snap Issue, Missing Junction, Short Segment, Angle Issue, Duplicate.
@@ -408,6 +422,7 @@ The Add-in includes a native **Export to GDB** service (`GdbExportService.cs`) t
 
 | معامل الإعداد | الاسم البرمجي | القيمة الافتراضية | الوصف الهندسي |
 | :--- | :--- | :---: | :--- |
+| **نمط جلب البيانات** | `DataSource` | `DisplayCache` | اختيار بين 4 أنماط: `DisplayCache`, `LiveQuery`, `RealGeometry`, أو `EntireLayer`. |
 | **تفاوت التداخل** | `OverlapToleranceSqMeters` | `0.0001 m²` (1 سم²) | الحد الأدنى لمساحة التقاطع لاحتسابه كتداخل هندسي. |
 | **تفاوت الفجوات الهوائية** | `GapToleranceSqMeters` | `0.001 m²` (10 سم²) | الحد الأدنى لمساحة الفراغ المحصور بين المضلعات لاعتباره فجوة. |
 | **تفاوت الأضلاع القصيرة** | `ShortSegmentToleranceMeters` | `0.10 m` (10 سم) | طول الضلع الذي يعتبر ما دونه ضلعاً متناهي الصغر. |
@@ -416,7 +431,7 @@ The Add-in includes a native **Export to GDB** service (`GdbExportService.cs`) t
 | **زاوية الرأس الزائد** | `RedundantVertexAngleTolerance` | `179.9°` | الزوايا التي تقترب من 180° وتعتبر رؤوساً غير ضرورية على استقامة الخط. |
 | **تفاوت العقد المفقودة** | `JunctionDistanceToleranceMeters` | `0.10 m` (10 سم) | أقصى مسافة فاصلة بين نقطة مضلع وضلع مضلع مجاور للتحقق من وجود عقدة. |
 | **مفاتيح تفعيل الفحوصات** | `IsCheckEnabled_*` | `true` | مربعات اختيار لتشغيل أو إيقاف أي فحص بشكل مستقل. |
-| **استعادة الافتراضيات** | — | — | إعادة ضبط كافة القيم للمعايير المصنعية الموصى بها. |
+| **استعادة الافتراضيات** | — | — | إعادة ضبط كافة القيم للمعايير المصنعية الموصى بها ونمط Display Cache. |
 
 ---
 
@@ -433,7 +448,12 @@ The Add-in includes a native **Export to GDB** service (`GdbExportService.cs`) t
 
 1. **كيفية الاستخدام:** اختر الطبقة المحددة (مثل `Parcels`) أو اختر **`All Polygon Layers`** لفحص جميع طبقات المضلعات المحددة معاً.
 2. **زر التحديث (`↻`):** لتحديث قائمة الطبقات فوراً عند إضافة أو تسمية طبقات جديدة دون إعادة فتح اللوحة.
-3. **الفائدة العملية:** منع الأخطاء الزائفة الناتجة عن تداخل طبقات متباينة بطبيعتها (مثل تداخل قطع الأراضي مع الأحياء السكنية أو نطاقات استخدامات الأراضي).
+3. **التمييز التلقائي للطبقات الخدمية:** تُلحق أسماء الطبقات السحابية والخدمية تلقائياً بعلامة `(Service)`.
+4. **مؤشر النمط النشط:** يظهر أسفل قائمة الطبقات مباشرة لعرض نمط جلب البيانات الحالي (مثال: `Mode: Real Geometry (All Selected)`).
+5. **اشتراطات وتنبيهات فحص كامل الطبقة (Entire Layer):**
+   - في حال اختيار `All Polygon Layers`، يظهر تنبيه فوري: `⚠️ Entire Layer mode requires selecting a specific local polygon layer.`
+   - في حال اختيار طبقة خدمية تحمل وسم `(Service)`، يظهر تنبيه فوري: `⚠️ Selected layer is a Service layer. Entire Layer requires a local layer.`
+   - يمنع البرنامج بدء الفحص ويظهر رسالة تحذيرية واضحة إذا لم تكن الطبقة المختارة محلية، لحماية خدمات الويب من الاستعلامات الثقيلة.
 
 ---
 
@@ -540,13 +560,14 @@ The Add-in includes a native **Export to GDB** service (`GdbExportService.cs`) t
 [مسح النتائج وإعادة الفحص للتحقق من سلامة التصحيح]
 ```
 
-1. **التحديد:** استخدم أداة التحديد في ArcGIS Pro لاختيار المضلعات المراد فحصها (أو اتركها دون تحديد لفحص كامل النطاق المعروض).
-2. **التهيئة:** افتح لوحة **Results** واختر الطبقة المستهدفة.
-3. **التشغيل:** انقر على زر **Run QC** (زر التشغيل الأخضر).
-4. **التصفح والتكبير:** تصفح الأخطاء حسب التصنيف، وانقر على أي خطأ ثم زر **Zoom** للانتقال إلى موقعه.
-5. **التوثيق:** انقر على **Export to GDB** لإنشاء طبقات رسمية للأخطاء.
-6. **المعالجة:** استخدم أدوات التعديل القياسية في ArcGIS Pro (Reshape, Align, Split, Merge, Snapping) لإصلاح الخلل.
-7. **إعادة التحقق:** انقر على **Clear Results** وأعد تشغيل الفحص للتأكد من زوال كافة الأخطاء.
+1. **تحديد النمط:** اختر **نمط جلب البيانات (Data Source Mode)** المناسب من لوحة الإعدادات (كاش العرض، استعلام مباشر، الأشكال الحقيقية، أو كامل الطبقة).
+2. **التحديد:** استخدم أداة التحديد في ArcGIS Pro لاختيار المضلعات المراد فحصها (أو تجاوز هذه الخطوة في حال تفعيل نمط Entire Layer).
+3. **التهيئة واختيار الطبقة:** افتح لوحة **Results** واختر الطبقة المستهدفة (إلزامية في نمط Entire Layer).
+4. **التشغيل:** انقر على زر **Run QC** (زر التشغيل الأخضر).
+5. **التصفح والتكبير:** تصفح الأخطاء حسب التصنيف، وانقر على أي خطأ ثم زر **Zoom** للانتقال إلى موقعه.
+6. **التوثيق:** انقر على **Export to GDB** لإنشاء طبقات رسمية للأخطاء.
+7. **المعالجة:** استخدم أدوات التعديل القياسية في ArcGIS Pro (Reshape, Align, Split, Merge, Snapping) لإصلاح الخلل.
+8. **إعادة التحقق:** انقر على **Clear Results** وأعد تشغيل الفحص للتأكد من زوال كافة الأخطاء.
 
 ---
 

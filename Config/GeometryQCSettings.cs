@@ -8,7 +8,9 @@ namespace GeometryQCAddIn.Config
     public enum DataSourceMode
     {
         DisplayCache = 0,
-        LiveQuery = 1
+        LiveQuery = 1,
+        RealGeometry = 2,
+        EntireLayer = 3
     }
 
     public enum ExecutionMode

@@ -90,7 +90,60 @@ namespace GeometryQCAddIn.UI
         public MapLayerItem? SelectedLayer
         {
             get => _selectedLayer;
-            set => SetProperty(ref _selectedLayer, value);
+            set
+            {
+                if (SetProperty(ref _selectedLayer, value))
+                {
+                    NotifyPropertyChanged(nameof(LayerSelectionWarningText));
+                    NotifyPropertyChanged(nameof(HasLayerSelectionWarning));
+                }
+            }
+        }
+
+        public string CurrentModeDescription
+        {
+            get
+            {
+                return GeometryQCSettings.Instance.DataSource switch
+                {
+                    DataSourceMode.DisplayCache => "Display Cache (Selection in Viewport)",
+                    DataSourceMode.LiveQuery => "Live Query (Selection in Viewport)",
+                    DataSourceMode.RealGeometry => "Real Geometry (All Selected, Ignore Viewport)",
+                    DataSourceMode.EntireLayer => "Entire Layer (Local Layer Only)",
+                    _ => "Display Cache"
+                };
+            }
+        }
+
+        public bool IsEntireLayerSelected => GeometryQCSettings.Instance.DataSource == DataSourceMode.EntireLayer;
+
+        public string? LayerSelectionWarningText
+        {
+            get
+            {
+                if (IsEntireLayerSelected)
+                {
+                    if (SelectedLayer == null || SelectedLayer.IsAll)
+                    {
+                        return "⚠️ Entire Layer mode requires selecting a specific local polygon layer.";
+                    }
+                    if (!SelectedLayer.IsLocal)
+                    {
+                        return "⚠️ Selected layer is a Service layer. Entire Layer requires a local layer.";
+                    }
+                }
+                return null;
+            }
+        }
+
+        public bool HasLayerSelectionWarning => !string.IsNullOrEmpty(LayerSelectionWarningText);
+
+        public void NotifyModeChanged()
+        {
+            NotifyPropertyChanged(nameof(CurrentModeDescription));
+            NotifyPropertyChanged(nameof(IsEntireLayerSelected));
+            NotifyPropertyChanged(nameof(LayerSelectionWarningText));
+            NotifyPropertyChanged(nameof(HasLayerSelectionWarning));
         }
 
         private ObservableCollection<IssueGroupViewModel> _issueGroups = new ObservableCollection<IssueGroupViewModel>();
@@ -233,7 +286,9 @@ namespace GeometryQCAddIn.UI
                         {
                             if (fl.ShapeType == ArcGIS.Core.CIM.esriGeometryType.esriGeometryPolygon)
                             {
-                                layersList.Add(new MapLayerItem(fl.Name, fl.URI ?? fl.Name));
+                                bool isLocal = !GeometryHelpers.IsServiceLayer(fl);
+                                string displayName = isLocal ? fl.Name : $"{fl.Name} (Service)";
+                                layersList.Add(new MapLayerItem(displayName, fl.URI ?? fl.Name, isAll: false, isLocal: isLocal));
                             }
                         }
                         catch (Exception ex)
@@ -276,6 +331,32 @@ namespace GeometryQCAddIn.UI
             {
                 StatusText = "No active map view. Please open a map.";
                 return;
+            }
+
+            // Validation for EntireLayer mode
+            if (settings.DataSource == DataSourceMode.EntireLayer)
+            {
+                if (SelectedLayer == null || SelectedLayer.IsAll || string.IsNullOrEmpty(SelectedLayer.Uri))
+                {
+                    StatusText = "Entire Layer mode requires selecting a specific local polygon layer.";
+                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
+                        "Entire Layer mode requires choosing a specific polygon layer.\n\nPlease select a target layer from the Layer dropdown before running QC.",
+                        "Target Layer Required",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (!SelectedLayer.IsLocal)
+                {
+                    StatusText = $"Layer '{SelectedLayer.DisplayName}' is a Service Layer. Entire Layer mode only supports local layers.";
+                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
+                        $"The selected layer '{SelectedLayer.DisplayName}' is a Service/Web Layer.\n\nEntire Layer QC can only be executed on local data sources (e.g. File Geodatabase, Mobile Geodatabase, Shapefile, Enterprise Geodatabase).\n\nPlease select a local layer or change the Data Source Mode in Settings.",
+                        "Local Layer Required",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Warning);
+                    return;
+                }
             }
 
             IsBusy = true;
