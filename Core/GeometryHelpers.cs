@@ -34,6 +34,26 @@ namespace GeometryQCAddIn.Core
         }
 
         /// <summary>
+        /// Extracts parts of a polygon as lists of Segments.
+        /// </summary>
+        public static List<List<Segment>> GetPartsAsSegments(Polygon poly)
+        {
+            var partsList = new List<List<Segment>>();
+            if (poly == null) return partsList;
+
+            foreach (var part in poly.Parts)
+            {
+                var segs = new List<Segment>(part.Count);
+                for (int i = 0; i < part.Count; i++)
+                {
+                    segs.Add(part[i]);
+                }
+                partsList.Add(segs);
+            }
+            return partsList;
+        }
+
+        /// <summary>
         /// Extracts all segments with part and segment indexing.
         /// </summary>
         public static List<(MapPoint P1, MapPoint P2, int PartIndex, int SegmentIndex)> GetAllSegments(Polygon poly)

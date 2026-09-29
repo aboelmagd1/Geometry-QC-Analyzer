@@ -80,16 +80,8 @@
     <RemoveDir Directories="$(AddInDir)" />
     <Copy SourceFiles="$(AddInPackage)" DestinationFolder="$(ProjectDir)" />
     
-    <!-- Auto-deploy to ArcGIS Pro AddIns Folder -->
-    <PropertyGroup>
-      <ProAddInFolder>$(USERPROFILE)\Documents\ArcGIS\AddIns\ArcGISPro\{8a7f921d-44a3-4b92-95f2-953e5e6080dc}</ProAddInFolder>
-    </PropertyGroup>
-    <MakeDir Directories="$(ProAddInFolder)" Condition="!Exists('$(ProAddInFolder)')" />
-    <Copy SourceFiles="$(AddInPackage)" DestinationFolder="$(ProAddInFolder)" />
-    
     <Message Text="[SUCCESS] ArcGIS Pro Add-in Package created: $(AddInPackage)" Importance="high" />
     <Message Text="[SUCCESS] Copied to project root: $(ProjectDir)GeometryQCAddIn.esriAddinX" Importance="high" />
-    <Message Text="[SUCCESS] Auto-deployed to ArcGIS Pro: $(ProAddInFolder)" Importance="high" />
   </Target>
 
 </Project>

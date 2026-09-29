@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using ArcGIS.Core.Geometry;
 using GeometryQCAddIn.Config;
 using GeometryQCAddIn.Core;
+using GeometryQCAddIn.Core.Checks;
 using GeometryQCAddIn.Models;
 
 namespace GeometryQCAddIn.Tests
@@ -21,6 +23,7 @@ namespace GeometryQCAddIn.Tests
             TestSegmentPointDistance();
             TestMetricJunctionInterior();
             TestAreaConversion();
+            TestCurveRedundantVertexCalculations();
 
             Console.WriteLine("All Geometry QC Core Tests Passed Successfully.");
         }
@@ -183,6 +186,115 @@ namespace GeometryQCAddIn.Tests
             }
 
             Console.WriteLine("✓ Point-to-segment distance test passed.");
+        }
+
+        private static void TestCurveRedundantVertexCalculations()
+        {
+            double thresholdDeg = 179.9;
+            double tolMapUnits = 0.01; // 1 cm
+
+            // Test 1: Continuous circular arc split into two halves
+            var center = new Coordinate2D(500, 500);
+            double r = 50.0;
+            var arc1 = new EllipticArcBuilderEx(0.0, Math.PI / 4, center, r, null).ToSegment();
+            var arc2 = new EllipticArcBuilderEx(Math.PI / 4, Math.PI / 4, center, r, null).ToSegment();
+            var v1 = arc1.EndPoint;
+
+            bool isRedundant1 = RedundantVertexCheck.AreCurvesContinuousRedundant(
+                arc1, arc2, v1, thresholdDeg, tolMapUnits, null, out double? angle1, out string details1);
+
+            if (!isRedundant1 || !angle1.HasValue || Math.Abs(angle1.Value - 180.0) > 0.01)
+            {
+                throw new Exception($"Continuous circular arc test failed: Expected redundant with 180°, got {isRedundant1}, angle={angle1}");
+            }
+
+            // Test 2: Different radius (r=50 vs r=60) - genuine geometric difference
+            var arcDiffR = new EllipticArcBuilderEx(Math.PI / 4, Math.PI / 4, center, 60.0, null).ToSegment();
+            bool isRedundant2 = RedundantVertexCheck.AreCurvesContinuousRedundant(
+                arc1, arcDiffR, v1, thresholdDeg, tolMapUnits, null, out _, out _);
+
+            if (isRedundant2)
+            {
+                throw new Exception("Different radius test failed: Arcs with different radii should NOT be flagged as redundant.");
+            }
+
+            // Test 3: Different center - genuine geometric difference
+            var centerDiff = new Coordinate2D(502, 500);
+            var arcDiffCenter = new EllipticArcBuilderEx(Math.PI / 4, Math.PI / 4, centerDiff, r, null).ToSegment();
+            bool isRedundant3 = RedundantVertexCheck.AreCurvesContinuousRedundant(
+                arc1, arcDiffCenter, v1, thresholdDeg, tolMapUnits, null, out _, out _);
+
+            if (isRedundant3)
+            {
+                throw new Exception("Different center test failed: Arcs with different centers should NOT be flagged as redundant.");
+            }
+
+            // Test 4: Reverse curvature (inflection, CW vs CCW)
+            var arcReverse = new EllipticArcBuilderEx(center, r, ArcOrientation.ArcClockwise, null).ToSegment();
+            bool isRedundant4 = RedundantVertexCheck.AreCurvesContinuousRedundant(
+                arc1, arcReverse, v1, thresholdDeg, tolMapUnits, null, out _, out _);
+
+            if (isRedundant4)
+            {
+                throw new Exception("Reverse curvature test failed: Reverse curvature (inflection) should NOT be flagged as redundant.");
+            }
+
+            // Test 5: Arc to Line transition (Curve -> Vertex -> Line)
+            var lineSeg = new LineBuilderEx(v1, MapPointBuilderEx.CreateMapPoint(v1.X + 10, v1.Y)).ToSegment();
+            bool isRedundant5 = RedundantVertexCheck.AreCurvesContinuousRedundant(
+                arc1, lineSeg, v1, thresholdDeg, tolMapUnits, null, out _, out _);
+
+            if (isRedundant5)
+            {
+                throw new Exception("Arc to Line test failed: Transition between curve and line should NOT be flagged as redundant.");
+            }
+
+            // Test 6: Continuous cubic Bezier split
+            var p0 = new Coordinate2D(0, 0);
+            var c1 = new Coordinate2D(10, 20);
+            var c2 = new Coordinate2D(40, 20);
+            var p3 = new Coordinate2D(50, 0);
+            double t = 0.5;
+            var p01 = new Coordinate2D(p0.X + (c1.X - p0.X) * t, p0.Y + (c1.Y - p0.Y) * t);
+            var p12 = new Coordinate2D(c1.X + (c2.X - c1.X) * t, c1.Y + (c2.Y - c1.Y) * t);
+            var p23 = new Coordinate2D(c2.X + (p3.X - c2.X) * t, c2.Y + (p3.Y - c2.Y) * t);
+            var p012 = new Coordinate2D(p01.X + (p12.X - p01.X) * t, p01.Y + (p12.Y - p01.Y) * t);
+            var p123 = new Coordinate2D(p12.X + (p23.X - p12.X) * t, p12.Y + (p23.Y - p12.Y) * t);
+            var split = new Coordinate2D(p012.X + (p123.X - p012.X) * t, p012.Y + (p123.Y - p012.Y) * t);
+
+            var bez1 = new CubicBezierBuilderEx(p0, p01, p012, split, null).ToSegment();
+            var bez2 = new CubicBezierBuilderEx(split, p123, p23, p3, null).ToSegment();
+            var vBez = MapPointBuilderEx.CreateMapPoint(split.X, split.Y);
+
+            bool isRedundant6 = RedundantVertexCheck.AreCurvesContinuousRedundant(
+                bez1, bez2, vBez, thresholdDeg, tolMapUnits, null, out double? angle6, out _);
+
+            if (!isRedundant6 || !angle6.HasValue || Math.Abs(angle6.Value - 180.0) > 0.01)
+            {
+                throw new Exception($"Continuous Bezier test failed: Expected redundant with 180°, got {isRedundant6}, angle={angle6}");
+            }
+
+            // Test 7: Bezier with corner / kink (deflected tangent)
+            var kinkCP1 = new Coordinate2D(split.X, split.Y + 20); // 90 degree kink
+            var bezKink = new CubicBezierBuilderEx(split, kinkCP1, p23, p3, null).ToSegment();
+            bool isRedundant7 = RedundantVertexCheck.AreCurvesContinuousRedundant(
+                bez1, bezKink, vBez, thresholdDeg, tolMapUnits, null, out _, out _);
+
+            if (isRedundant7)
+            {
+                throw new Exception("Bezier kink test failed: Bezier curves with deflected tangent should NOT be flagged as redundant.");
+            }
+
+            // Test 8: Arc to Bezier (different segment types)
+            bool isRedundant8 = RedundantVertexCheck.AreCurvesContinuousRedundant(
+                arc1, bez2, v1, thresholdDeg, tolMapUnits, null, out _, out _);
+
+            if (isRedundant8)
+            {
+                throw new Exception("Arc to Bezier test failed: Different curve types should NOT be flagged as redundant.");
+            }
+
+            Console.WriteLine("✓ Curve-aware redundant vertex calculation tests passed.");
         }
     }
 }

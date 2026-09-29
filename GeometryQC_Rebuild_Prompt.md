@@ -37,6 +37,9 @@ QC Preview V01/
 ├── GeometryQCAddIn.sln                        # Visual Studio Solution
 ├── GeometryQCModule.cs                        # Add-In Module Singleton
 ├── package.ps1                                # PowerShell Build & Cache-Purge Script
+├── README.md                                  # Project Overview (Bilingual)
+├── USER_GUIDE.md                              # User Guide (Bilingual)
+├── QC_CHECKS_LOGIC.md                         # Mathematical & Cadastral Logic Guide (Bilingual)
 ├── Config/
 │   └── GeometryQCSettings.cs                  # User Settings Model & Persistence
 ├── Core/
@@ -50,7 +53,7 @@ QC Preview V01/
 │   │   ├── ShortSegmentCheck.cs               # CHK_SHORT_SEG
 │   │   ├── AngleIssueCheck.cs                 # CHK_ANGLE
 │   │   ├── SnapIssueCheck.cs                  # CHK_SNAP
-│   │   ├── RedundantVertexCheck.cs            # CHK_REDUNDANT (Junction Guard)
+│   │   ├── RedundantVertexCheck.cs            # CHK_REDUNDANT (Curves & Junction Guard)
 │   │   └── JunctionVertexCheck.cs             # CHK_JUNCTION (T-Junctions)
 │   ├── DisplayCacheProvider.cs                # Ultra-fast viewport display cache reader
 │   ├── EntireLayerProvider.cs                 # Full local layer provider (all features, no selection required)
@@ -178,10 +181,17 @@ Each check implements `IGeometryCheck` and executes asynchronously with a `Cance
    - Uses `VertexIndex` to find vertices from different features separated by $0 < d \le \text{tolerance}$.
    - Sub-millimeter reporting: If $d < 0.01\text{ m}$, outputs metric in millimeters (`mm`) with up to 4 decimal places (e.g., `0.04 mm`). Excludes identical vertices ($d < 10^{-5}\text{ m}$).
 9. **Redundant Vertex (`CHK_REDUNDANT`, Info, default 179.9°):**
-   - Flags collinear vertices along straight lines where angle $\ge 179.9°$.
-   - **Junction Guard:** Protects vertices that coincide with vertices of adjacent polygons where the neighbor bends ($< 180°$). If both coincident vertices are collinear ($\approx 180°$), flags both as redundant.
+   - **Straight Edges:** Flags collinear vertices along straight lines where angle $\ge 179.9°$.
+   - **Parametric True Curves (Circular Arcs & Cubic Béziers):**
+     - Extracts segment parts via `GeometryHelpers.ExtractPartsSegments()`.
+     - Preserves valid transitions: Line $\leftrightarrow$ Curve and Arc $\leftrightarrow$ Bézier transitions are strictly protected and never flagged.
+     - **Circular Arcs:** Tests center coincidence, radius match, orientation consistency (both CW or CCW), and tangent angle $\ge 179.9°$.
+     - **Cubic Béziers:** Tests $C^1$ tangent angle continuity $\ge 179.9°$ and $C^2$ second derivative curvature consistency. Kinks and inflection points are preserved.
+   - **Junction Guard:** Protects vertices that coincide with vertices of adjacent polygons where the neighbor bends or forms a legitimate transition. If both coincident vertices along a shared boundary are redundant, flags both.
 10. **Missing Junction (`CHK_JUNCTION`, Warning, default 0.10 m = 10 cm):**
     - Identifies T-junctions where a vertex on polygon A touches an edge of polygon B, but polygon B lacks a matching snapped vertex.
+
+For comprehensive mathematical proofs and cadastral rationale, see [QC_CHECKS_LOGIC.md](QC_CHECKS_LOGIC.md).
 
 ---
 
@@ -214,13 +224,17 @@ Each check implements `IGeometryCheck` and executes asynchronously with a `Cance
 <Target Name="PackageAndDeployAddIn" AfterTargets="Build">
   <PropertyGroup>
     <AddInPackage>$(OutDir)GeometryQCAddIn.esriAddinX</AddInPackage>
-    <ProAddInFolder>$(USERPROFILE)\Documents\ArcGIS\AddIns\ArcGISPro\{8a7f921d-44a3-4b92-95f2-953e5e6080dc}</ProAddInFolder>
     <ProAssemblyCache>$(LOCALAPPDATA)\ESRI\ArcGISPro\AssemblyCache\{8a7f921d-44a3-4b92-95f2-953e5e6080dc}</ProAssemblyCache>
   </PropertyGroup>
-  <Copy SourceFiles="$(AddInPackage)" DestinationFolder="$(ProjectDir)" />
-  <MakeDir Directories="$(ProAddInFolder)" Condition="!Exists('$(ProAddInFolder)')" />
-  <Copy SourceFiles="$(AddInPackage)" DestinationFolder="$(ProAddInFolder)" />
+  
+  <!-- Clear stale AssemblyCache to prevent caching lock issues -->
   <RemoveDir Directories="$(ProAssemblyCache)" Condition="Exists('$(ProAssemblyCache)')" />
+  
+  <!-- Copy to project root for convenient distribution -->
+  <Copy SourceFiles="$(AddInPackage)" DestinationFolder="$(ProjectDir)" />
+  
+  <Message Text="[SUCCESS] ArcGIS Pro Add-in Package created: $(AddInPackage)" Importance="high" />
+  <Message Text="[SUCCESS] Copied to project root: $(ProjectDir)GeometryQCAddIn.esriAddinX" Importance="high" />
 </Target>
 ```
 
@@ -282,8 +296,10 @@ Each check implements `IGeometryCheck` and executes asynchronously with a `Cance
 6. **فحص الأضلاع القصيرة (Short Segment):** رصد الحدود متناهية الصغر الأقل من التفاوت (افتراضياً 10 سم).
 7. **فحص الزوايا الحادة (Angle Issue):** كشف الإبر والزوايا الحادة الشاذة الأقل من 5 درجات.
 8. **فحص عدم الالتقاط (Snap Issue):** رصد الرؤوس المتقاربة غير الملتقطة مع قياس المسافة بدقة الملليمتر (`mm`) حتى 4 خانات عشرية للمسافات الأقل من 1 سم.
-9. **فحص الرؤوس الزائدة (Redundant Vertex):** كشف الرؤوس التي تقع على استقامة الخط (180°)، مع ميزة **Junction Guard** الذكية لحماية نقاط الربط بين المضلعات المتجاورة.
+9. **فحص الرؤوس الزائدة (Redundant Vertex):** كشف الرؤوس التي تقع على استقامة الخط (180°)، وتحليل المنحنيات الحقيقية (الأقواس الدائرية ومنحنيات بيزيير) للتأكد من تطابق المركز ونصف القطر واستمرارية المماسات والانحناء ($C^1/C^2$)، مع ميزة **حارس نقاط الربط (Junction Guard)** الذكية لحماية نقاط الربط بين المضلعات المتجاورة.
 10. **فحص العقد المفقودة (Missing Junction):** رصد نقاط التماس (T-Junctions) التي تلامس ضلع مضلع مجاور دون وجود رأس ملتقط عليها.
+
+للاطلاع على الشرح الرياضي والمساحي المفصل لكافة الخوارزميات، راجع: [QC_CHECKS_LOGIC.md](QC_CHECKS_LOGIC.md).
 
 ---
 
