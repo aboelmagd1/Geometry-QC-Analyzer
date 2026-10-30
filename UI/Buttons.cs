@@ -107,7 +107,7 @@ namespace GeometryQCAddIn.UI
         {
             Caption = isEnabled ? "QC (ON)" : "QC (OFF)";
             Tooltip = isEnabled
-                ? "Geometry QC is active. Click to disable automatic/interactive checks."
+                ? "Geometry QC is active. Click to disable quality control analysis."
                 : "Geometry QC is disabled. Click to enable.";
 
             try

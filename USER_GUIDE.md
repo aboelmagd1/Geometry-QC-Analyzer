@@ -34,13 +34,12 @@
 **Geometry QC Analyzer** is a native, professional ArcGIS Pro add-in developed for GIS professionals, surveyors, and cadastral authorities. It performs comprehensive geometric, topological, and cartographic validation on polygon layers without altering underlying datasets or requiring complex geodatabase topology configurations.
 
 ### Key Capabilities:
-* **⚡ 100% In-Memory & Read-Only:** Validates active map selections or full layers on the fly without schema locks, temporary feature classes, or database modifications.
-* **🎯 4 Execution & Data Source Modes:**
-  1. `DisplayCache` (Default): Evaluates in-memory screen cache for selected features visible in the current viewport.
-  2. `LiveQuery`: Queries features matching the selection within the current map extent.
-  3. `RealGeometry`: Fetches true, unclipped feature geometry directly from the underlying FeatureClass for all selected features, ignoring screen viewport limits.
-  4. `EntireLayer`: Validates all features in a local layer without requiring selection, protected with automated safety blocks against web/service layers.
-* **🛡️ Curve-Aware Analysis & Junction Guard:** Validates parametric curves (Circular Arcs & Cubic Béziers) and protects boundary nodes where neighbor parcels split or turn.
+* **⚡ 100% In-Memory & Read-Only:** Validates selected features on the fly without schema locks, temporary feature classes, or database modifications.
+* **🎯 Display Cache Data Source & Manual Execution:** Ultra-fast screen-rendered geometry cache for selected polygon features visible in the current viewport. Validation runs on-demand via the **Run QC** button.
+* **🛡️ Max Features Safety Cap:** Configurable protection threshold (default: 500 features) preventing browser freezing or memory exhaustion on accidental massive selections.
+* **💾 Per-Project Target Layer Persistence:** Remembers chosen target layers (including "All Polygon Layers") per ArcGIS Pro project, restoring them automatically upon reopening.
+* **✅ Clear "No errors found ✓" Status:** Distinguishes verified zero-error runs with clear feedback while keeping analyzed feature counts and execution times visible.
+* **🛡️ Curve-Aware Analysis & Junction Guard:** Validates parametric curves (Circular Arcs & Cubic Béziers) and protects boundary nodes where neighbor parcels split or turn. Includes an optional warning sub-check for near-tangent arc–line collinear junctions.
 * **📐 Sub-Millimeter Measurement Precision:** Formats distances below 1 cm in millimeters (`mm`) down to sub-millimeter fractions (e.g., `0.35 mm`), preventing misleading `0.00 cm` labels.
 * **💾 Direct Geodatabase Export:** Exports detected errors with one click into a dedicated `QC_Errors` Feature Dataset in the project's Default Geodatabase.
 
@@ -103,19 +102,19 @@ Located in the top ArcGIS Pro Ribbon bar:
 Docked on the right side of the ArcGIS Pro canvas:
 
 1. **Header & Performance Metrics:** Displays processed feature count, elapsed validation time in seconds, and active layer name.
-2. **Target Layer Selector:** Dropdown to select a specific layer or choose `All Polygon Layers`. Accompanied by a refresh button (`↻`) to update layer lists dynamically.
-3. **Data Source Mode Indicator:** Inline label indicating the active data pipeline (e.g., `Mode: Real Geometry (All Selected)`).
-4. **Issue Categories Tree:** Hierarchical tree grouping errors with color-coded severity badges:
-   - 🔴 **Errors:** Overlap, Invalid Geometry.
-   - 🟠 **Warnings:** Enclosed Gap, Snap Issue, Missing Junction, Short Segment, Angle Issue, Duplicate Geometry.
+1. **Header & Performance Metrics:** Displays processed feature count, elapsed validation time in seconds, and categorized issue badge (e.g. `3 errors · 2 warnings` or `No errors found ✓`).
+2. **Target Layer Selector:** Dropdown to select a specific layer or choose `All Polygon Layers`. The choice is persistently saved inside the current ArcGIS Pro project. Accompanied by a refresh button (`↻`) to update layer lists dynamically.
+3. **Issue Categories Tree:** Hierarchical tree grouping errors with color-coded severity badges:
+   - 🔴 **Errors:** Overlap, Invalid Geometry, Duplicate Geometry.
+   - 🟠 **Warnings:** Enclosed Gap, Snap Issue, Missing Junction, Short Segment, Angle Issue, Arc–Line Junctions.
    - 🔵 **Info:** Redundant Vertex, Multi-Part Feature.
-5. **Issue Details Panel:** Selecting any issue displays:
+4. **Issue Details Panel:** Selecting any issue displays:
    - Primary Feature OID and source layer.
    - Related Feature OID(s) (e.g., overlapping neighbor polygon).
    - Precise measurement value (area in `m²`/`cm²`, distance in `mm`/`cm`, angle in `°`).
    - Detailed technical diagnosis.
    - **Zoom to Issue Button (`🔍 Zoom`):** Instantly pans and centers the active map view directly on the defect.
-6. **Action Buttons:**
+5. **Action Buttons:**
    - **Run QC (Cyan):** Run validation.
    - **Export to GDB (Emerald Green):** Export all detected issues into the project's Default Geodatabase.
    - **Clear Results (Navy / Slate):** Clear tree results and graphic overlays.
@@ -128,20 +127,23 @@ Provides complete customization over tolerances and thresholds:
 
 | Parameter | Internal Setting Key | Default Value | Description |
 | :--- | :--- | :---: | :--- |
-| **Data Source Mode** | `DataSource` | `DisplayCache` | Select among: `DisplayCache`, `LiveQuery`, `RealGeometry`, or `EntireLayer`. |
-| **Overlap Tolerance** | `OverlapToleranceSqMeters` | `0.0001 m²` (1 cm²) | Minimum intersection area required to report an overlap. |
-| **Gap Tolerance** | `GapToleranceSqMeters` | `0.001 m²` (10 cm²) | Minimum enclosed void area required to flag a gap. |
-| **Short Segment Tolerance** | `ShortSegmentToleranceMeters` | `0.10 m` (10 cm) | Segment length threshold below which edges are flagged. |
-| **Angle Tolerance** | `AngleToleranceDegrees` | `5.0°` | Sharp needle spikes narrower than this are flagged. |
-| **Snap Tolerance** | `SnapToleranceMeters` | `0.01 m` (1.0 cm) | Vertex distance threshold for detecting unsnapped nodes. |
-| **Redundant Vertex Angle** | `RedundantVertexAngleTolerance` | `179.9°` | Straight angle threshold for collinear vertices & curve tangents. |
-| **Junction Tolerance** | `JunctionDistanceToleranceMeters` | `0.10 m` (10 cm) | Distance threshold for detecting missing T-junction vertices. |
-| **Individual Check Toggles** | `IsCheckEnabled_*` | `true` | Independent check-boxes to enable or disable each of the 10 checks. |
-| **Restore Defaults** | — | — | One-click reset to factory standard thresholds and Display Cache mode. |
+| **Max Features Cap** | `MaxFeaturesToProcess` | `500` | Safety limit on selected features processed per run. |
+| **Overlap Tolerance** | `OverlapMinAreaSqMeters` | `0.00001 m²` | Minimum intersection area required to report an overlap. |
+| **Gap Tolerance** | `GapMinAreaSqMeters` | `0.00001 m²` | Minimum enclosed void area required to flag a gap. |
+| **Short Segment Tolerance** | `ShortSegmentThresholdCm` | `15.0 cm` | Segment length threshold below which edges are flagged. |
+| **Angle Tolerance** | `AngleThresholdDegrees` | `30.0°` | Sharp angles narrower than this are flagged. |
+| **Snap Tolerance** | `SnapToleranceCm` | `15.0 cm` | Vertex distance threshold for detecting unsnapped nodes. |
+| **Redundant Vertex Angle** | `RedundantVertexAngleDegrees` | `175.0°` | Straight angle threshold for collinear vertices & curve tangents. |
+| **Flag Arc–Line Junctions** | `FlagArcLineJunctions` | `false` | Optional warning check for near-tangent curve–line joins. |
+| **Arc–Line Angle Tolerance**| `ArcLineAngleToleranceDegrees` | `175.0°` | Tangent angle threshold for arc–line collinear junctions. |
+| **Show Warnings on Map** | `ShowWarningsOnMap` | `true` | Controls whether warning-level symbols are drawn on the map. |
+| **Junction Tolerance** | `MissingJunctionToleranceCm` | `10.0 cm` | Distance threshold for detecting missing T-junction vertices. |
+| **Individual Check Toggles** | `Check*` | `true` | Independent check-boxes to enable or disable each of the 10 checks. |
+| **Restore Defaults** | — | — | One-click reset to factory standard thresholds. |
 
 ---
 
-## 4. Target Layer Selection & Data Source Modes
+## 4. Target Layer Selection & Project Persistence
 
 ```text
 +-------------------------------------------------------------+
@@ -149,23 +151,15 @@ Provides complete customization over tolerances and thresholds:
 +-------------------------------------------------------------+
 ```
 
-### 4.1 Target Layer Selector
+### 4.1 Target Layer Selector & Per-Project Persistence
 * **Single Layer vs. All Polygon Layers:** Restricts validation to a single layer (e.g., `Parcels`) to avoid cross-layer false positives, or selects `All Polygon Layers` to inspect multiple polygon layers simultaneously.
-* **Dynamic Refresh (`↻`):** Refreshes the layer list immediately when layers are added or renamed without reopening the pane.
-* **Service Layer Tagging:** Remote web/feature services are automatically identified and tagged with `(Service)`.
+* **Project Persistence:** The selected target layer is saved directly within the ArcGIS Pro project (`.aprx`). When reopening the project, your layer choice is seamlessly restored. If the layer is no longer present, it gracefully falls back to `All Polygon Layers`.
+* **Dynamic Refresh (`↻`):** Refreshes the layer list immediately when layers are added or renamed without resetting your active selection.
 
-### 4.2 The 4 Data Source Modes
-1. **Display Cache (Default):** Ultra-fast screen-rendered geometry cache for selected features within the current viewport extent.
-2. **Live Query:** Queries fresh geometries from the data source filtered by the active viewport extent and selection.
-3. **Real Geometry (Selected Features, Ignore Viewport):** Fetches true, unclipped geometries directly from the underlying FeatureClass for all selected features regardless of whether they are visible in the active viewport.
-4. **Entire Layer (Local Layer Only, All Features):** Analyzes all features in the specified local layer without requiring selection.
-
-### 4.3 Safety Guards for Entire Layer Mode:
-* If `All Polygon Layers` is selected, an inline warning appears:
-  `⚠️ Entire Layer mode requires selecting a specific local polygon layer.`
-* If a service layer `(Service)` is selected, an inline warning appears:
-  `⚠️ Selected layer is a Service layer. Entire Layer requires a local layer.`
-* Execution is strictly blocked under these conditions to protect web services and ensure data safety.
+### 4.2 Data Acquisition & Manual Execution
+* **Display Cache Data Source:** Geometries are extracted directly from the in-memory display cache of selected polygon features in the active map view, ensuring zero database locks and rapid evaluation.
+* **Manual Execution:** Runs exclusively on demand via the **Run QC** button.
+* **Selection Cap Guard:** If the number of selected features exceeds the `MaxFeaturesToProcess` setting (default 500), execution stops safely with an informative prompt.
 
 ---
 
@@ -174,15 +168,16 @@ Provides complete customization over tolerances and thresholds:
 | # | Check Name | Internal Code | Default Tolerance | Severity | Description & Detection Scope |
 | :-: | :--- | :--- | :---: | :---: | :--- |
 | **1** | **Invalid Geometry** | `CHK_INVALID_GEOM` | — | 🔴 Error | Polygon / Point: Detects non-simple geometries according to OGC/Esri specifications (self-intersections, bow-ties, inverted rings, rings with < 3 points, NaN coordinates). |
-| **2** | **Overlap** | `CHK_OVERLAP` | `0.0001 m²` | 🔴 Error | Polygon: Detects overlapping regions between polygon pairs. Decomposes multipart intersections into separate polygons, calculates area accurately in `m²` or `cm²`, and excludes boundary sliver noise. |
-| **3** | **Duplicate Geometry** | `CHK_DUPLICATE` | — | 🟠 Warning | Polygon: Detects 100% coincident identical polygons stacked on top of each other, suppressing duplicate overlap reporting. |
-| **4** | **Enclosed Gap** | `CHK_GAP` | `0.001 m²` | 🟠 Warning | Polygon: Detects enclosed, hidden air gaps and sliver holes bounded entirely by adjacent polygons. |
+| **2** | **Overlap** | `CHK_OVERLAP` | `0.00001 m²` | 🔴 Error | Polygon: Detects overlapping regions between polygon pairs. Decomposes multipart intersections into separate polygons, calculates area accurately in `m²` or `cm²`, and excludes boundary sliver noise. |
+| **3** | **Duplicate Geometry** | `CHK_DUPLICATE` | — | 🔴 Error | Polygon: Detects 100% coincident identical polygons stacked on top of each other, suppressing duplicate overlap reporting. |
+| **4** | **Enclosed Gap** | `CHK_GAP` | `0.00001 m²` | 🟠 Warning | Polygon: Detects enclosed, hidden air gaps and sliver holes bounded entirely by adjacent polygons. |
 | **5** | **Multi-Part Feature** | `CHK_MULTIPART` | — | 🔵 Info | Polygon: Identifies single records containing multiple disconnected polygon rings (`PartCount > 1`) in singlepart workflows. |
-| **6** | **Short Segment** | `CHK_SHORT_SEG` | `10.0 cm` | 🟠 Warning | Polyline: Detects micro-edges and tiny segments shorter than tolerance, excluding coincident vertices (`d < 1e-6`). |
-| **7** | **Angle Issue** | `CHK_ANGLE` | `5.0°` | 🟠 Warning | Point: Detects extreme acute angles and needle spikes resulting from accidental mouse clicks. |
-| **8** | **Snap Issue** | `CHK_SNAP` | `1.0 cm` | 🟠 Warning | Point: Detects unsnapped near-coincident vertices within tolerance. Distances under 1 cm are formatted in millimeters (`mm`) down to sub-millimeter precision (`0.35 mm`). Truly coincident vertices are excluded. |
-| **9** | **Redundant Vertex** | `CHK_REDUNDANT` | `179.9°` | 🔵 Info | Point: Detects superfluous collinear vertices along straight lines and redundant intermediate vertices between continuous curves (Curve → Vertex → Curve). Analyzes curve properties (center, radius, curvature, tangent direction); preserves valid curve/line transitions and compound curve changes. Features **Junction Guard**: protected if adjacent feature forms a legitimate boundary corner or junction. |
+| **6** | **Short Segment** | `CHK_SHORT_SEG` | `15.0 cm` | 🟠 Warning | Polyline: Detects micro-edges and tiny segments shorter than tolerance, excluding coincident vertices (`d < 1e-6`). |
+| **7** | **Angle Issue** | `CHK_ANGLE` | `30.0°` | 🟠 Warning | Point: Detects acute angles and needle spikes resulting from accidental clicks or digitizing errors. |
+| **8** | **Snap Issue** | `CHK_SNAP` | `15.0 cm` | 🟠 Warning | Point: Detects unsnapped near-coincident vertices within tolerance. Distances under 1 cm are formatted in millimeters (`mm`) down to sub-millimeter precision (`0.35 mm`). Truly coincident vertices are excluded. |
+| **9** | **Redundant Vertex** | `CHK_REDUNDANT` | `175.0°` | 🔵 Info | Point: Detects superfluous collinear vertices along straight lines and redundant intermediate vertices between continuous curves (Curve → Vertex → Curve). Analyzes curve properties (center, radius, curvature, tangent direction); preserves valid curve/line transitions and compound curve changes. Features **Junction Guard**: protected if adjacent feature forms a legitimate boundary corner or junction. Optional sub-feature: flags near-tangent arc–line junctions as warnings (`CHK_REDUNDANT_ARCLINE`). |
 | **10**| **Missing Junction** | `CHK_JUNCTION` | `10.0 cm` | 🟠 Warning | Point: Flags T-junction contact points where a polygon vertex touches a neighboring edge without a matching snapped node (cadastral standard). |
+| **11**| **Flat / Pseudo-Arc** | `CHK_FLAT_PSEUDO_ARC` | `0.01 cm` / `10.0 cm²` | 🟠 Warning | Polyline: Detects true circular arcs with negligible sagitta ($\le 0.01\text{ cm} / 0.1\text{ mm}$) or enclosed segment area ($\le 10.0\text{ cm}^2$) that functionally represent straight lines (Disabled by default). |
 
 ---
 
@@ -210,7 +205,9 @@ Upon running validation, temporary graphics are rendered on the active map view:
 | **Angle Issue** | Point | Orange Red | `#FFFF4500` | Star marker (size 12) |
 | **Snap Issue** | Point | Neon Lime | `#FF32CD32` | Circle marker with inner crosshair |
 | **Redundant Vertex** | Point | Slate Gray | `#FF708090` | Square marker (size 8) |
-| **Missing Junction** | Point | Coral / Salmon | `#FFFF7F50` | Diamond marker (size 10) |
+| **Possible Redundant (Arc–Line)** | Point | Coral / Tangerine | `#FFFF7F50` | Triangle marker (size 9) |
+| **Missing Junction** | Point | Magenta | `#FFFF00FF` | X / Star marker (size 11) |
+| **Flat Pseudo-Arc** | Polyline | Turquoise / Teal | `#FF00CED1` | Dashed turquoise line (size 3) |
 
 ---
 
@@ -318,8 +315,11 @@ The Add-in includes a native **Export to GDB** service (`GdbExportService.cs`) t
 
 ### أبرز المزايا:
 * **⚡ فحص لحظي في الذاكرة بالكامل (100% In-Memory):** فحص فوري للمعالم المحددة في وضع القراءة فقط، دون إنشاء ملفات مؤقتة على القرص أو حجز أقفال (Locks) على قواعد البيانات.
-* **🎯 4 أنماط مرنة لجلب البيانات:** دعم كامل لـ `DisplayCache` (الافتراضي)، `LiveQuery`، `RealGeometry` (تجاوز حدود الشاشة وقراءة المعالم الأصلية)، و`EntireLayer` (فحص كامل الطبقة المحلية بدون تحديد).
-* **🛡️ فحص ذكي للمنحنيات وحارس نقاط الربط (Junction Guard):** تحليل متقدم للأقواس الدائرية ومنحنيات بيزيير مع حماية النقاط المشتركة التي تلتقي عندها مضلعات مجاورة.
+* **🎯 مصدر بيانات كاش العرض وتشغيل يدوي:** اعتماد كاش العرض (Display Cache) مصدراً وحيداً للبيانات للمعالم المحددة داخل نطاق الشاشة، مع تشغيل يدوي عبر زر **Run QC**.
+* **🛡️ سقف أمان لعدد المعالم المحددة (Max Features Cap):** حماية أداء التطبيق بمنع فحص أكثر من 500 معلم محدد كحد افتراضي لحماية الذاكرة ومنع التجميد.
+* **💾 حفظ اختيار الطبقة لكل مشروع (Per-Project Layer Persistence):** حفظ الطبقة المستهدفة (بما في ذلك "All Polygon Layers") داخل ملف مشروع ArcGIS Pro واستعادتها تلقائياً عند فتح المشروع.
+* **✅ إشعار واضح لعدم وجود أخطاء ("No errors found ✓"):** تمييز حالات خلو المضلعات من الأخطاء مع بقاء عدد المعالم وزمن التحليل معروضاً بوضوح.
+* **🛡️ فحص ذكي للمنحنيات وحارس نقاط الربط (Junction Guard):** تحليل متقدم للأقواس الدائرية ومنحنيات بيزيير مع حماية النقاط المشتركة، مع خيار تدقيق تحذيري إضافي لنقاط التماس بين المنحنيات والخطوط (Arc–Line).
 * **📐 دقة فائقة تحت الملليمتر:** قياس المسافات الأقل من 1 سم بوحدة الملليمتر (`mm`) حتى 3 و4 خانات عشرية (مثل `0.35 mm`) لمنع الرسائل المضللة `0.00 cm`.
 * **💾 تصدير مباشر لقاعدة البيانات:** تصدير كافة الأخطاء بضغطة زر إلى Feature Dataset مخصص باسم `QC_Errors` في الـ Default Geodatabase للمشروع.
 
@@ -379,20 +379,14 @@ The Add-in includes a native **Export to GDB** service (`GdbExportService.cs`) t
 ### ب. لوحة النتائج (Results DockPane)
 
 تقع على يمين شاشة ArcGIS Pro وتتضمن:
-1. **الترويسة والعدادات الإحصائية:** تعرض عدد المعالم المفحوصة والزمن المستغرق بالثواني واسم الطبقة النشطة.
-2. **محدد الطبقة المستهدفة (Target Layer Selector):** لاختيار طبقة محددة للفحص (مثل `Parcels`) أو فحص جميع الطبقات (`All Polygon Layers`). بجانبه زر تحديث (`↻`) لتحديث القائمة فورياً.
-3. **مؤشر النمط النشط:** يوضح نمط جلب البيانات الحالي (مثال: `Mode: Real Geometry (All Selected)`).
-4. **شجرة تصنيف الأخطاء (Issue Categories Tree):** تجميع هرمي للأخطاء حسب نوع الفحص مع شارات ملونة لدرجة الأهمية:
-   - 🔴 **أخطاء حرجة (Errors):** Overlap, Invalid Geometry.
-   - 🟠 **تحذيرات (Warnings):** Enclosed Gap, Snap Issue, Missing Junction, Short Segment, Angle Issue, Duplicate.
+1. **الترويسة وشارة المشاكل المصنفة:** تعرض عدد المعالم المفحوصة والزمن المستغرق وشارة تصنيف العيوب (مثل `3 errors · 2 warnings` أو `No errors found ✓`).
+2. **محدد الطبقة المستهدفة (Target Layer Selector):** لاختيار طبقة محددة للفحص (مثل `Parcels`) أو فحص جميع الطبقات (`All Polygon Layers`). يُحفظ الاختيار تلقائياً داخل المشروع، وبجانبه زر تحديث (`↻`) لتحديث القائمة دون فقدان الاختيار الحالي.
+3. **شجرة تصنيف الأخطاء (Issue Categories Tree):** تجميع هرمي للأخطاء حسب نوع الفحص مع شارات ملونة لدرجة الأهمية:
+   - 🔴 **أخطاء (Errors):** Overlap, Invalid Geometry, Duplicate.
+   - 🟠 **تحذيرات (Warnings):** Enclosed Gap, Snap Issue, Missing Junction, Short Segment, Angle Issue, Arc–Line Junctions.
    - 🔵 **معلومات (Info):** Redundant Vertex, Multi-Part Feature.
-5. **لوحة تفاصيل الخطأ المختار:** عند النقر على أي خطأ في الشجرة تظهر بياناته:
-   - رقم المعلم الأصلي واسم طبقته.
-   - أرقام المعالم المشتركة في الخطأ (مثل المضلع المجاور المتداخل معه).
-   - القياس الدقيق للخطأ (المساحة بـ `m²` أو `cm²`، المسافة بـ `mm` أو `cm`، الزاوية بـ `°`).
-   - التشخيص الهندسي الفني للخطأ.
-   - **زر التكبير والانتقال (`🔍 Zoom`):** يقوم بالانتقال والتكبير الفوري على موقع الخطأ في الخريطة بالمقياس المناسب.
-6. **أزرار الإجراءات:**
+4. **لوحة تفاصيل الخطأ المختار:** عند النقر على أي خطأ في الشجرة تظهر بياناته التفصيلية مع زر **Zoom** للتكبير الفوري على موقع الخطأ.
+5. **أزرار الإجراءات:**
    - **Run QC (سماوي / تركواز):** تشغيل الفحص فوراً.
    - **Export to GDB (أخضر زمردي):** تصدير كافة الأخطاء المكتشفة إلى Geodatabase المشروع.
    - **Clear Results (كحلي / رمادي):** مسح نتائج الفحص وإزالة الأشكال التوضيحية من الخريطة.
@@ -405,21 +399,24 @@ The Add-in includes a native **Export to GDB** service (`GdbExportService.cs`) t
 
 | معامل الإعداد | الكود البرمجي | القيمة الافتراضية | الوصف التفصيلي |
 | :--- | :--- | :---: | :--- |
-| **نمط جلب البيانات** | `DataSource` | `DisplayCache` | الاختيار بين 4 أنماط: `DisplayCache`, `LiveQuery`, `RealGeometry`, أو `EntireLayer`. |
-| **تفاوت التداخل** | `OverlapToleranceSqMeters` | `0.0001 m²` (1 سم²) | أقل مساحة تقاطع يُعتبر عندها التداخل خطأً مساحياً. |
-| **تفاوت الفجوات** | `GapToleranceSqMeters` | `0.001 m²` (10 سم²) | أقل مساحة للفراغ الهوائي المحصور ليُعتبر فجوة غير قانونية. |
-| **تفاوت الأضلاع القصيرة** | `ShortSegmentToleranceMeters` | `0.10 m` (10 سم) | الحد الأدنى لطول الضلع الذي يُصنف ما دونه كضلع قصير جداً. |
-| **تفاوت الزوايا الحادة** | `AngleToleranceDegrees` | `5.0°` | الزوايا الأضيق من هذه القيمة تُصنف كإبر وزوايا شاذة. |
-| **تفاوت عدم الالتقاط** | `SnapToleranceMeters` | `0.01 m` (1.0 سم) | أقصى مسافة فاصلة بين رأسين متقاربين للتحقق من عدم التقاطهما. |
-| **زاوية الرأس الزائد** | `RedundantVertexAngleTolerance` | `179.9°` | زاوية الاستقامة للخطوط وتطابق المماسات للمنحنيات المتصلة التي تُصنف عندها النقطة كرأس زائد. |
-| **تفاوت العقد المفقودة** | `JunctionDistanceToleranceMeters` | `0.10 m` (10 سم) | أقصى مسافة فاصلة بين نقطة مضلع وضلع مضلع مجاور للتحقق من وجود عقدة. |
-| **مفاتيح تفعيل الفحوصات** | `IsCheckEnabled_*` | `true` | مربعات اختيار لتشغيل أو إيقاف أي فحص بشكل مستقل. |
-| **استعادة الافتراضيات** | — | — | إعادة ضبط كافة القيم للمعايير المصنعية الموصى بها ونمط Display Cache. |
+| **سقف المعالم المحددة** | `MaxFeaturesToProcess` | `500` | أقصى عدد من المعالم المحددة المسموح بمعالجتها في كل تشغيل. |
+| **تفاوت التداخل** | `OverlapMinAreaSqMeters` | `0.00001 m²` | أقل مساحة تقاطع يُعتبر عندها التداخل خطأً مساحياً. |
+| **تفاوت الفجوات** | `GapMinAreaSqMeters` | `0.00001 m²` | أقل مساحة للفراغ الهوائي المحصور ليُعتبر فجوة غير قانونية. |
+| **تفاوت الأضلاع القصيرة** | `ShortSegmentThresholdCm` | `15.0 cm` | الحد الأدنى لطول الضلع الذي يُصنف ما دونه كضلع قصير جداً. |
+| **تفاوت الزوايا الحادة** | `AngleThresholdDegrees` | `30.0°` | الزوايا الأضيق من هذه القيمة تُصنف كزوايا شاذة. |
+| **تفاوت عدم الالتقاط** | `SnapToleranceCm` | `15.0 cm` | أقصى مسافة فاصلة بين رأسين متقاربين للتحقق من عدم التقاطهما. |
+| **زاوية الرأس الزائد** | `RedundantVertexAngleDegrees` | `175.0°` | زاوية الاستقامة للخطوط وتطابق المماسات للمنحنيات المتصلة. |
+| **فحص تماس الأقواس والخطوط** | `FlagArcLineJunctions` | `false` | خيار تحذيري إضافي لنقاط التقاء المنحنيات والخطوط على خط مماس شبه مستقيم. |
+| **زاوية تماس القوس والخط** | `ArcLineAngleToleranceDegrees` | `175.0°` | زاوية التماس المعتمدة لاعتبار نقطة الالتقاء كرأس زائد محتمل. |
+| **إظهار التحذيرات على الخريطة** | `ShowWarningsOnMap` | `true` | التحكم في رسم رموز المشاكل المصنفة كتحذير فوق الخريطة. |
+| **تفاوت العقد المفقودة** | `MissingJunctionToleranceCm` | `10.0 cm` | أقصى مسافة فاصلة بين نقطة مضلع وضلع مضلع مجاور للتحقق من وجود عقدة. |
+| **مفاتيح تفعيل الفحوصات** | `Check*` | `true` | مربعات اختيار لتشغيل أو إيقاف أي فحص بشكل مستقل. |
+| **استعادة الافتراضيات** | — | — | إعادة ضبط كافة القيم للمعايير الافتراضية المعتمدة. |
 
 ---
 
 <a name="4-ميزة-اختيار-الطبقة-المستهدفة-وأنماط-جلب-البيانات-ar"></a>
-## 4. ميزة اختيار الطبقة المستهدفة وأنماط جلب البيانات
+## 4. اختيار الطبقة المستهدفة والحفظ لكل مشروع
 
 ```text
 +-------------------------------------------------------------+
@@ -427,23 +424,15 @@ The Add-in includes a native **Export to GDB** service (`GdbExportService.cs`) t
 +-------------------------------------------------------------+
 ```
 
-### 4.1 اختيار الطبقة المستهدفة
-* تتيح القائمة المنسدلة اختيار طبقة مضلعات محددة (مثل `Parcels`) لمنع رصد أخطاء زائفة ناتجة عن تقاطع طبقات غير متجانسة، أو اختيار **`All Polygon Layers`** لفحص جميع طبقات المضلعات المحددة معاً.
-* **زر التحديث (`↻`):** لتحديث قائمة الطبقات فوراً عند إضافة أو تعديل أسماء الطبقات في الخريطة.
-* **التمييز التلقائي للطبقات الخدمية:** تُلحق أسماء الطبقات السحابية والخدمية تلقائياً بعلامة `(Service)`.
+### 4.1 اختيار الطبقة المستهدفة والحفظ التلقائي لكل مشروع
+* تتيح القائمة المنسدلة اختيار طبقة مضلعات محددة (مثل `Parcels`) أو اختيار **`All Polygon Layers`** لفحص جميع طبقات المضلعات المحددة معاً.
+* **الحفظ التلقائي في المشروع:** يتم تخزين الطبقة المختارة داخل ملف مشروع ArcGIS Pro (`.aprx`) واستعادتها بسلاسة عند إعادة فتح المشروع دون أي رسائل تحذيرية مزعجة.
+* **زر التحديث (`↻`):** لتحديث قائمة الطبقات فوراً دون التأثير على الاختيار الحالي.
 
-### 4.2 الأنماط الأربعة لجلب البيانات
-1. **Display Cache (الافتراضي):** فحص فوري فائق السرعة للمعالم المحددة الظاهرة داخل نطاق الشاشة (Viewport).
-2. **Live Query:** استعلام مباشر مقيد بنطاق الشاشة والتحديد الحالي.
-3. **Real Geometry (تجاوز حدود الشاشة):** فحص الأشكال الهندسية الحقيقية الأصلية من مصدر البيانات (`FeatureClass`) لجميع المعالم المحددة بغض النظر عن ظهورها في الشاشة.
-4. **Entire Layer (كامل الطبقة المحلية):** فحص شامل لكافة معالم الطبقة دون اشتراط التحديد.
-
-### 4.3 اشتراطات الحماية لنمط Entire Layer:
-* في حال اختيار `All Polygon Layers` يظهر تنبيه فوري:
-  `⚠️ Entire Layer mode requires selecting a specific local polygon layer.`
-* في حال اختيار طبقة خدمية تحمل علامة `(Service)` يظهر تنبيه فوري:
-  `⚠️ Selected layer is a Service layer. Entire Layer requires a local layer.`
-* يمنع البرنامج بدء الفحص ويظهر رسالة تحذيرية لحماية خدمات الويب من الاستعلامات الثقيلة.
+### 4.2 آلية جلب البيانات والتشغيل اليدوي
+* **مصدر بيانات كاش العرض (Display Cache):** يتم استخراج الأشكال الهندسية مباشرة من كاش العرض للمعالم المحددة في نطاق الخريطة النشط لضمان أقصى سرعة واستجابة.
+* **التشغيل اليدوي:** الفحص يتم يدوياً عند الضغط على زر **Run QC**.
+* **حماية سقف المعالم:** إذا تجاوز عدد المعالم المحددة سقف الأمان (500 معلم افتراضياً)، يتوقف الفحص بأمان مع توجيه المستخدم لتقليل التحديد أو رفع السقف من الإعدادات.
 
 ---
 
@@ -453,15 +442,16 @@ The Add-in includes a native **Export to GDB** service (`GdbExportService.cs`) t
 | # | اسم الفحص (Check Name) | الكود الداخلي | التفاوت الافتراضي | مستوى الأهمية | الوصف الهندسي وطبيعة الخطأ |
 | :-: | :--- | :--- | :---: | :---: | :--- |
 | **1** | **Invalid Geometry** | `CHK_INVALID_GEOM` | — | 🔴 خطأ حرج | مضلع / نقطة: فحص صحة المضلع طوبولوجياً طبقاً لمواصفات OGC/Esri. يكتشف التقاطعات الذاتية (Bow-tie)، الحلقات المعكوسة، الحلقات التي تحتوي على أقل من 3 نقاط، والإحداثيات غير المعرفة (NaN). |
-| **2** | **Overlap** | `CHK_OVERLAP` | `0.0001 m²` | 🔴 خطأ حرج | مضلع: يكتشف المساحات المشتركة المتداخلة بين المضلعات. يقوم بتفكيك التداخلات المتعددة وعرض مساحتها بوحدات واضحة (`m²` أو `cm²`) مع استبعاد شوائب تلاصق الحدود. |
+| **2** | **Overlap** | `CHK_OVERLAP` | `0.00001 m²` (100 cm²) | 🔴 خطأ حرج | مضلع: يكتشف المساحات المشتركة المتداخلة بين المضلعات. يقوم بتفكيك التداخلات المتعددة وعرض مساحتها بوحدات واضحة (`m²` أو `cm²`) مع استبعاد شوائب تلاصق الحدود بفضل حارس السمك الأدنى. |
 | **3** | **Duplicate Geometry** | `CHK_DUPLICATE` | — | 🟠 تحذير | مضلع: يكتشف المضلعات المتطابقة هندسياً بنسبة 100% المرسومة فوق بعضها بالخطأ (Coincident Polygons)، ويمنع تكرار تقريرها كـ Overlap. |
-| **4** | **Enclosed Gap** | `CHK_GAP` | `0.001 m²` | 🟠 تحذير | مضلع: يكتشف الفجوات والثقوب الهوائية غير المرئية المحصورة والمغلقة تماماً بين المضلعات المتجاورة الناتجة عن أخطاء الرسم. |
+| **4** | **Enclosed Gap** | `CHK_GAP` | `0.00001 m²` (100 cm²) | 🟠 تحذير | مضلع: يكتشف الفجوات والثقوب الهوائية غير المرئية المحصورة والمغلقة تماماً بين المضلعات المتجاورة الناتجة عن أخطاء الرسم. |
 | **5** | **Multi-Part Feature** | `CHK_MULTIPART` | — | 🔵 معلومة | مضلع: يكتشف المعالم ذات السجل الواحد التي تتكون من أكثر من مضلع منفصل (`PartCount > 1`) في قواعد البيانات التي تتطلب مضلعات أحادية (Singlepart). |
-| **6** | **Short Segment** | `CHK_SHORT_SEG` | `10.0 cm` | 🟠 تحذير | خط: يكتشف الأضلاع أو الأجزاء متناهية الصغر التي يقل طولها عن الحد المسموح، مع استبعاد النقاط المتطابقة لحصر الأخطاء في عيوب الرسم الفعلية. |
-| **7** | **Angle Issue** | `CHK_ANGLE` | `5.0°` | 🟠 تحذير | نقطة: يكتشف الزوايا الحادة والشاذة جداً (Spikes) التي تقل عن الدرجة المحددة والناتجة عادةً عن نقرات خاطئة أثناء الرسم بالماوس. |
-| **8** | **Snap Issue** | `CHK_SNAP` | `1.0 cm` | 🟠 تحذير | نقطة: يكتشف الرؤوس والنقاط المتقاربة غير الملتقطة. تُعرض المسافات تحت السنتيمتر بالملليمتر (`mm`) بدقة فائقة لمنع تقريب المسافات غير الملتقطة إلى `0.00 cm` مع استبعاد النقاط المتطابقة تماماً. |
-| **9** | **Redundant Vertex** | `CHK_REDUNDANT` | `179.9°` | 🔵 معلومة | نقطة: يكتشف النقاط الزائدة على استقامة الخط (180°) والرؤوس غير الضرورية الواقعة بين منحنيين متصلين (منحنى ← رأس ← منحنى) عبر تحليل هندسة المنحنيات (تطابق المركز ونصف القطر ومماسات التماس)، مع استثناء الانتقالات الصحيحة بين المنحنيات والخطوط أو بين المنحنيات ذات الانحناء المتغير. وتعمل ميزة **حماية نقاط الربط (Junction Guard)** على استثناء النقاط المشتركة إذا كان المضلع المجاور ينكسر أو يرتبط عندها برأس حقيقي، مع تسجيل الخطأ على كلا المضلعين إذا كان الرأسان المتطابقان زائدين معاً. |
+| **6** | **Short Segment** | `CHK_SHORT_SEG` | `15.0 cm` | 🟠 تحذير | خط: يكتشف الأضلاع أو الأجزاء متناهية الصغر التي يقل طولها عن الحد المسموح، مع استبعاد النقاط المتطابقة لحصر الأخطاء في عيوب الرسم الفعلية. |
+| **7** | **Angle Issue** | `CHK_ANGLE` | `30.0°` | 🟠 تحذير | نقطة: يكتشف الزوايا الحادة والشاذة جداً (Spikes) التي تقل عن الدرجة المحددة والناتجة عادةً عن نقرات خاطئة أثناء الرسم بالماوس. |
+| **8** | **Snap Issue** | `CHK_SNAP` | `15.0 cm` | 🟠 تحذير | نقطة: يكتشف الرؤوس والنقاط المتقاربة غير الملتقطة. تُعرض المسافات تحت السنتيمتر بالملليمتر (`mm`) بدقة فائقة لمنع تقريب المسافات غير الملتقطة إلى `0.00 cm` مع استبعاد النقاط المتطابقة تماماً. |
+| **9** | **Redundant Vertex** | `CHK_REDUNDANT` / `CHK_REDUNDANT_ARCLINE` | `175.0°` (أقواس: 175.0° اختياري) | 🔵 معلومة / 🟠 تحذير | نقطة: يكتشف النقاط الزائدة على استقامة الخط (≥ 175°) والرؤوس غير الضرورية الواقعة بين منحنيين متصلين، مع فحص اختياري للرؤوس الزائدة عند التقاء القوس والخط المماس (Arc–Line Junction) كمستوى تحذير برمز مثلث مرجاني، مع حماية نقاط الربط (Junction Guard) وخيار لإظهار/إخفاء التحذيرات على الخريطة. |
 | **10**| **Missing Junction** | `CHK_JUNCTION` | `10.0 cm` | 🟠 تحذير | نقطة: يكتشف العقد المفقودة في الوصلات التبادلية (T-Junctions) عندما تلامس نقطة من مضلع ضلع مضلع مجاور دون وجود رأس مشترك ملتقط عليه (المعيار المعتمد في المخططات العقارية). |
+| **11**| **Flat / Pseudo-Arc** | `CHK_FLAT_PSEUDO_ARC` | `0.01 cm` / `10.0 cm²` | 🟠 تحذير | خط / قوس: كشف الأقواس الدائرية الوهمية والمنبسطة ذات سهم القوس الضئيل جداً ($\le 0.01\text{ cm} / 0.1\text{ mm}$) أو المساحة المحصورة ($\le 10.0\text{ cm}^2$) التي تمثل خطوطاً مستقيمة عملياً (معطل افتراضياً). |
 
 ---
 
@@ -491,7 +481,9 @@ The Add-in includes a native **Export to GDB** service (`GdbExportService.cs`) t
 | **Angle Issue** | نقطة | برتقالي ناري | `#FFFF4500` | علامة نجمة بحجم 12 |
 | **Snap Issue** | نقطة | أخضر ليموني | `#FF32CD32` | علامة دائرية مع تقاطع داخلي |
 | **Redundant Vertex** | نقطة | رمادي رصاصي | `#FF708090` | علامة مربعة بحجم 8 |
+| **Redundant Arc–Line Junction** | نقطة | مرجاني (Coral) | `#FFFF7F50` | علامة مثلث متساوي الأضلاع بحجم 9 (تحذير) |
 | **Missing Junction** | نقطة | مرجاني (Coral) | `#FFFF7F50` | علامة معينة بحجم 10 |
+| **Flat Pseudo-Arc** | خط | فيروزي (Turquoise) | `#FF00CED1` | خط متقطع بلون فيروزي بحجم 3 |
 
 ---
 

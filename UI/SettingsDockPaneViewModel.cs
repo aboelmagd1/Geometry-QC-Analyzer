@@ -1,3 +1,4 @@
+using System;
 using System.Windows.Input;
 using ArcGIS.Desktop.Framework;
 using ArcGIS.Desktop.Framework.Contracts;
@@ -26,74 +27,6 @@ namespace GeometryQCAddIn.UI
             }
         }
 
-        public bool IsDisplayCacheMode
-        {
-            get => _settings.DataSource == DataSourceMode.DisplayCache;
-            set
-            {
-                if (value)
-                {
-                    _settings.DataSource = DataSourceMode.DisplayCache;
-                    NotifyDataSourceProperties();
-                    SaveSettings();
-                }
-            }
-        }
-
-        public bool IsLiveQueryMode
-        {
-            get => _settings.DataSource == DataSourceMode.LiveQuery;
-            set
-            {
-                if (value)
-                {
-                    _settings.DataSource = DataSourceMode.LiveQuery;
-                    NotifyDataSourceProperties();
-                    SaveSettings();
-                }
-            }
-        }
-
-        public bool IsRealGeometryMode
-        {
-            get => _settings.DataSource == DataSourceMode.RealGeometry;
-            set
-            {
-                if (value)
-                {
-                    _settings.DataSource = DataSourceMode.RealGeometry;
-                    NotifyDataSourceProperties();
-                    SaveSettings();
-                }
-            }
-        }
-
-        public bool IsEntireLayerMode
-        {
-            get => _settings.DataSource == DataSourceMode.EntireLayer;
-            set
-            {
-                if (value)
-                {
-                    _settings.DataSource = DataSourceMode.EntireLayer;
-                    NotifyDataSourceProperties();
-                    SaveSettings();
-                }
-            }
-        }
-
-        private void NotifyDataSourceProperties()
-        {
-            NotifyPropertyChanged(nameof(IsDisplayCacheMode));
-            NotifyPropertyChanged(nameof(IsLiveQueryMode));
-            NotifyPropertyChanged(nameof(IsRealGeometryMode));
-            NotifyPropertyChanged(nameof(IsEntireLayerMode));
-
-            // Notify Results dockpane if active
-            var resultsVm = FrameworkApplication.DockPaneManager?.Find(ResultsDockPaneViewModel.DockPaneId) as ResultsDockPaneViewModel;
-            resultsVm?.NotifyModeChanged();
-        }
-
         public bool EnableForServiceLayers
         {
             get => _settings.EnableForServiceLayers;
@@ -108,31 +41,16 @@ namespace GeometryQCAddIn.UI
             }
         }
 
-        public bool IsAutoRunMode
+        public int MaxFeaturesToProcess
         {
-            get => _settings.ExecutionMode == ExecutionMode.Auto;
+            get => _settings.MaxFeaturesToProcess;
             set
             {
-                if (value)
+                int val = Math.Clamp(value, 1, 100000);
+                if (_settings.MaxFeaturesToProcess != val)
                 {
-                    _settings.ExecutionMode = ExecutionMode.Auto;
+                    _settings.MaxFeaturesToProcess = val;
                     NotifyPropertyChanged();
-                    NotifyPropertyChanged(nameof(IsManualMode));
-                    SaveSettings();
-                }
-            }
-        }
-
-        public bool IsManualMode
-        {
-            get => _settings.ExecutionMode == ExecutionMode.Manual;
-            set
-            {
-                if (value)
-                {
-                    _settings.ExecutionMode = ExecutionMode.Manual;
-                    NotifyPropertyChanged();
-                    NotifyPropertyChanged(nameof(IsAutoRunMode));
                     SaveSettings();
                 }
             }
@@ -229,6 +147,35 @@ namespace GeometryQCAddIn.UI
             set { _settings.RedundantVertexAngleDegrees = value; NotifyPropertyChanged(); SaveSettings(); }
         }
 
+        public bool FlagArcLineJunctions
+        {
+            get => _settings.FlagArcLineJunctions;
+            set { _settings.FlagArcLineJunctions = value; NotifyPropertyChanged(); SaveSettings(); }
+        }
+
+        public double ArcLineAngleToleranceDegrees
+        {
+            get => _settings.ArcLineAngleToleranceDegrees;
+            set { _settings.ArcLineAngleToleranceDegrees = value; NotifyPropertyChanged(); SaveSettings(); }
+        }
+
+        public bool ShowWarningsOnMap
+        {
+            get => _settings.ShowWarningsOnMap;
+            set
+            {
+                if (_settings.ShowWarningsOnMap != value)
+                {
+                    _settings.ShowWarningsOnMap = value;
+                    NotifyPropertyChanged();
+                    SaveSettings();
+
+                    var resultsVm = FrameworkApplication.DockPaneManager.Find(ResultsDockPaneViewModel.DockPaneId) as ResultsDockPaneViewModel;
+                    resultsVm?.RefreshMapGraphics();
+                }
+            }
+        }
+
         public bool CheckMissingJunctions
         {
             get => _settings.CheckMissingJunctions;
@@ -239,6 +186,25 @@ namespace GeometryQCAddIn.UI
         {
             get => _settings.MissingJunctionToleranceCm;
             set { _settings.MissingJunctionToleranceCm = value; NotifyPropertyChanged(); SaveSettings(); }
+        }
+
+        // 11. Flat Pseudo-Arcs
+        public bool CheckFlatPseudoArcs
+        {
+            get => _settings.CheckFlatPseudoArcs;
+            set { _settings.CheckFlatPseudoArcs = value; NotifyPropertyChanged(); SaveSettings(); }
+        }
+
+        public double FlatArcSagittaToleranceCm
+        {
+            get => _settings.FlatArcSagittaToleranceCm;
+            set { _settings.FlatArcSagittaToleranceCm = value; NotifyPropertyChanged(); SaveSettings(); }
+        }
+
+        public double FlatArcAreaToleranceCm2
+        {
+            get => _settings.FlatArcAreaToleranceCm2;
+            set { _settings.FlatArcAreaToleranceCm2 = value; NotifyPropertyChanged(); SaveSettings(); }
         }
 
         public ICommand ResetDefaultsCommand { get; }
@@ -266,27 +232,32 @@ namespace GeometryQCAddIn.UI
         private void ResetDefaults()
         {
             _settings.IsEnabled = true;
-            _settings.DataSource = DataSourceMode.DisplayCache;
             _settings.EnableForServiceLayers = false;
-            _settings.ExecutionMode = ExecutionMode.Manual;
+            _settings.MaxFeaturesToProcess = 500;
 
             _settings.CheckInvalidGeometry = true;
             _settings.CheckOverlaps = true;
-            _settings.OverlapMinAreaSqMeters = 0.0001;
+            _settings.OverlapMinAreaSqMeters = 0.00001; // 0.00001 m²
             _settings.CheckDuplicates = true;
             _settings.CheckGaps = true;
-            _settings.GapMinAreaSqMeters = 0.001;
+            _settings.GapMinAreaSqMeters = 0.00001; // 0.00001 m²
             _settings.CheckMultiPart = true;
             _settings.CheckShortSegments = true;
-            _settings.ShortSegmentThresholdCm = 10.0;
+            _settings.ShortSegmentThresholdCm = 15.0; // 15.0 cm
             _settings.CheckAngleIssues = true;
-            _settings.AngleThresholdDegrees = 5.0;
+            _settings.AngleThresholdDegrees = 30.0; // 30°
             _settings.CheckSnapIssues = true;
-            _settings.SnapToleranceCm = 1.0;
+            _settings.SnapToleranceCm = 15.0; // 15 cm
             _settings.CheckRedundantVertices = true;
-            _settings.RedundantVertexAngleDegrees = 179.9;
+            _settings.RedundantVertexAngleDegrees = 175.0; // 175°
+            _settings.FlagArcLineJunctions = false;
+            _settings.ArcLineAngleToleranceDegrees = 175.0;
+            _settings.ShowWarningsOnMap = true;
             _settings.CheckMissingJunctions = true;
-            _settings.MissingJunctionToleranceCm = 10.0;
+            _settings.MissingJunctionToleranceCm = 10.0; // 10 cm
+            _settings.CheckFlatPseudoArcs = false; // Check 11: disabled by default
+            _settings.FlatArcSagittaToleranceCm = 0.01; // 0.01 cm (0.1 mm)
+            _settings.FlatArcAreaToleranceCm2 = 10.0; // 10.0 cm²
 
             SaveSettings();
 

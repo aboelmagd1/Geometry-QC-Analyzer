@@ -26,17 +26,16 @@
 **Geometry QC Analyzer** is a native, professional .NET 8 ArcGIS Pro add-in engineered for GIS professionals, cadastral cartographers, and land administration surveyors. Developed with the assistance of **Advanced AI**, it evaluates polygon and parcel datasets against rigorous geometric, topological, and cartographic rules in real time.
 
 ### 🌟 Key Highlights
-* **⚡ 100% In-Memory & Read-Only:** Validates active map selections or full layers on the fly without schema locks, temporary feature classes, or database modifications.
-* **🎯 4 Execution & Data Source Modes:**
-  - **Display Cache (Default):** Ultra-fast screen-rendered geometry cache for selected features within the current viewport extent.
-  - **Live Query:** Queries fresh geometries from the data source filtered by active viewport extent and selection.
-  - **Real Geometry (Ignore Viewport):** Fetches true, unclipped geometries directly from the underlying FeatureClass for all selected features, ignoring screen viewport limits.
-  - **Entire Layer (Local Only):** Validates all features in a local layer without requiring selection, protected with automated safety blocks against web/service layers.
-* **🧭 Interactive Results DockPane:** Dynamic categorization tree with active mode indicator, layer validation safety alerts, and instant **Zoom** to any error.
-* **🎨 Color-Coded Map Overlays:** Renders intuitive graphic markers (Red for Overlaps, Gold for Gaps, Lime for Snaps, Cyan for Short Segments).
+* **⚡ 100% In-Memory & Read-Only:** Validates selected features on the fly without schema locks, temporary feature classes, or database modifications.
+* **🎯 Display Cache Data Source & Manual Execution:** Ultra-fast screen-rendered geometry cache for selected features within the current viewport extent. Running is manual and controlled via the **Run QC** button.
+* **🛡️ Max Features Safety Cap:** Configurable protection threshold (default: 500 features) preventing browser freezing or memory exhaustion on accidental massive selections.
+* **💾 Per-Project Target Layer Persistence:** Remembers chosen target layers (including "All Polygon Layers") per ArcGIS Pro project, restoring them automatically upon reopening.
+* **✅ Clear "No errors found ✓" Status:** Distinguishes verified zero-error runs with clear feedback while keeping analyzed feature counts and execution times visible.
+* **🧭 Interactive Results DockPane:** Categorized issue tree with categorized counts ("3 errors · 2 warnings") and instant **Zoom** to any issue.
+* **🎨 Color-Coded Map Overlays:** High-visibility graphics for detected errors, with an option to toggle warning-level markers on/off.
 * **💾 Geodatabase Error Export (Export to GDB):** One-click export of all detected issues into a dedicated `QC_Errors` Feature Dataset inside the project's Default Geodatabase, categorized by error geometry type with complete audit metadata.
 * **📐 Sub-Millimeter Measurement Precision:** Formats distances below 1 cm in millimeters (`mm`) down to sub-millimeter fractions (e.g., `0.35 mm`), preventing misleading `0.00 cm` labels.
-* **🛡️ Curve-Aware Analysis & Junction Guard:** Validates parametric curves (Circular Arcs & Cubic Béziers) and protects boundary nodes where neighbor parcels split or turn.
+* **🛡️ Curve-Aware Analysis & Arc–Line Warning Option:** Validates parametric curves (Circular Arcs & Cubic Béziers) and protects boundary nodes via **Junction Guard**. Includes an optional sub-check for near-tangent arc–line collinear junctions.
 * **🌓 Full Light & Dark Theme Support:** Modern WPF UI styled to match ArcGIS Pro's native theme.
 
 ---
@@ -46,15 +45,16 @@
 | # | Check Name | Check ID | Default Tolerance | Description |
 | :-: | :--- | :--- | :-: | :--- |
 | **1** | **Invalid Geometry** | `CHK_INVALID_GEOM` | — | Detects self-intersections (bow-ties), inverted rings, NaN coordinates, and OGC/Esri non-simple polygons. |
-| **2** | **Overlap** | `CHK_OVERLAP` | `0.0001 m²` | Detects overlapping regions between polygon pairs with area measurement (`m²` or `cm²`) and pair deduplication. |
+| **2** | **Overlap** | `CHK_OVERLAP` | `0.00001 m²` | Detects overlapping regions between polygon pairs with area measurement (`m²` or `cm²`) and pair deduplication. |
 | **3** | **Duplicate Geometry** | `CHK_DUPLICATE` | — | Identifies 100% coincident identical polygons stacked on top of each other, suppressing duplicate overlap reporting. |
-| **4** | **Enclosed Gap** | `CHK_GAP` | `0.001 m²` | Discovers hidden, enclosed void gaps completely bounded by neighboring polygons. |
+| **4** | **Enclosed Gap** | `CHK_GAP` | `0.00001 m²` | Discovers hidden, enclosed void gaps completely bounded by neighboring polygons. |
 | **5** | **Multi-Part Feature** | `CHK_MULTIPART` | — | Flags single-record features consisting of multiple disconnected polygon rings (`PartCount > 1`). |
-| **6** | **Short Segment** | `CHK_SHORT_SEG` | `10.0 cm` | Detects micro-edges and extremely short polygon boundaries shorter than the user tolerance. |
-| **7** | **Angle Issue** | `CHK_ANGLE` | `5.0°` | Identifies severe sharp spikes, narrow needles, and digitizing click artifacts. |
-| **8** | **Snap Issue** | `CHK_SNAP` | `1.0 cm` | Detects unsnapped near-coincident vertices with sub-millimeter precision (`mm`), excluding true identical points. |
-| **9** | **Redundant Vertex** | `CHK_REDUNDANT` | `179.9°` | Detects superfluous collinear vertices along straight edges and redundant intermediate vertices between continuous curves (Curve → Vertex → Curve). Analyzes segment geometry (type, center, radius, tangents) while preserving valid curve/line transitions and protecting topological junctions via **Junction Guard**. |
+| **6** | **Short Segment** | `CHK_SHORT_SEG` | `15.0 cm` | Detects micro-edges and extremely short polygon boundaries shorter than the user tolerance. |
+| **7** | **Angle Issue** | `CHK_ANGLE` | `30.0°` | Identifies severe sharp spikes, narrow needles, and digitizing click artifacts. |
+| **8** | **Snap Issue** | `CHK_SNAP` | `15.0 cm` | Detects unsnapped near-coincident vertices with sub-millimeter precision (`mm`), excluding true identical points. |
+| **9** | **Redundant Vertex** | `CHK_REDUNDANT` | `175.0°` | Detects superfluous collinear vertices along straight edges and redundant intermediate vertices between continuous curves (Curve → Vertex → Curve). Analyzes segment geometry (type, center, radius, tangents) while preserving valid transitions and protecting topological junctions via **Junction Guard**. Optional sub-feature: flags near-tangent arc–line junctions as warnings. |
 | **10**| **Missing Junction** | `CHK_JUNCTION` | `10.0 cm` | Flags T-junction contact points where a polygon vertex touches a neighboring polygon edge without a matching snapped node (cadastral standard). |
+| **11**| **Flat / Pseudo-Arc** | `CHK_FLAT_PSEUDO_ARC` | `0.01 cm` / `10.0 cm²` | *(Optional, Disabled)* Detects true circular arcs with negligible sagitta ($\le 0.01\text{ cm} / 0.1\text{ mm}$) or enclosed segment area ($\le 10.0\text{ cm}^2$) that functionally represent straight lines. |
 
 For full mathematical equations and cadastral rationale, see [QC_CHECKS_LOGIC.md](QC_CHECKS_LOGIC.md).
 
@@ -97,17 +97,16 @@ For full mathematical equations and cadastral rationale, see [QC_CHECKS_LOGIC.md
 **أداة فحص الجودة الهندسية والمكانية (Geometry QC Analyzer)** هي إضافة برمجية أصلية لبيئة **ArcGIS Pro** مبنية على منصة **.NET 8**. تم تصميمها وتطويرها بمساعدة تقنيات **الذكاء الاصطناعي المتقدم (Advanced AI)** لخدمة مهندسي المساحة، إدارات الأراضي، ومختصي نظم المعلومات الجغرافية لتدقيق واكتشاف العيوب الهندسية والطوبولوجية في المخططات العقارية والخرائط الرقمية لحظياً وبأعلى معايير الدقة.
 
 ### 🌟 أبرز المميزات الفنية
-* **⚡ فحص لحظي فائق السرعة بالذاكرة (100% In-Memory):** فحص فوري للمعالم المحددة في وضع القراءة فقط، دون إنشاء ملفات مؤقتة على القرص أو حجز أقفال على قواعد البيانات.
-* **🎯 4 أنماط مرنة ومتقدمة لجلب البيانات:**
-  - **Display Cache:** فحص فوري من كاش العرض للمعالم المحددة الظاهرة داخل الـ Viewport.
-  - **Live Query:** استعلام مباشر مقيد بنطاق الشاشة والتحديد الحالي.
-  - **Real Geometry (Ignore Viewport):** فحص الأشكال الهندسية الحقيقية الأصلية من مصدر البيانات (`FeatureClass`) لجميع المعالم المحددة متجاوزاً حدود الشاشة (بغض النظر عن ظهورها في الـ Viewport).
-  - **Entire Layer (Local Only):** فحص شامل لكافة معالم الطبقة دون اشتراط التحديد، ومقتصر بدقة وأمان على الطبقات المحلية (Geodatabase, Shapefile).
-* **🧭 لوحة نتائج تفاعلية:** شجرة تصنيفية للأخطاء مع مؤشر للنمط النشط، تنبيهات لسلامة اختيار الطبقات، وزر **Zoom** للانتقال الفوري وتكبير موقع كل عيب على الخريطة.
-* **🎨 رسومات توضيحية ملونة:** تمييز بصري فوق الخريطة بألوان مميزة لكل نوع خطأ (تداخل بالأحمر، عدم التقاط بالأزرق، فجوات بالأصفر... إلخ).
+* **⚡ فحص فوري فائق السرعة بالذاكرة (100% In-Memory):** فحص فوري للمعالم المحددة في وضع القراءة فقط، دون إنشاء ملفات مؤقتة على القرص أو حجز أقفال على قواعد البيانات.
+* **🎯 مصدر بيانات كاش العرض وتشغيل يدوي:** اعتماد كاش العرض (Display Cache) مصدراً وحيداً للبيانات للمعالم المحددة داخل نطاق الشاشة، مع تشغيل يدوي عبر زر **Run QC**.
+* **🛡️ حد أقصى لعدد المعالم المحددة (Safety Cap):** حماية أداء البرنامج بمنع معالجة أكثر من 500 معلم محدد كحد افتراضي (مع إمكانية تعديل الحد في الإعدادات) لتفادي التجميد أو استهلاك الذاكرة.
+* **💾 حفظ اختيار الطبقة لكل مشروع (Per-Project Persistence):** حفظ الطبقة المختارة (بما في ذلك "All Polygon Layers") داخل ملف مشروع ArcGIS Pro واستعادتها تلقائياً عند إعادة فتح المشروع دون رسائل تنبيهية مزعجة.
+* **✅ إشعار واضح عند خلو البيانات من الأخطاء ("No errors found ✓"):** إظهار رسالة واضحة تؤكد نجاح الفحص وعدم وجود أخطاء مع بقاء عدد المعالم التي تم فحصها وزمن التحليل ظاهراً.
+* **🧭 لوحة نتائج تفاعلية:** شجرة تصنيفية للأخطاء مع تصنيف إجمالي المشاكل ("3 errors · 2 warnings") وزر **Zoom** للانتقال الفوري وتكبير موقع كل عيب على الخريطة.
+* **🎨 رسومات توضيحية ملونة:** تمييز بصري فوق الخريطة بألوان مميزة لكل نوع خطأ مع خيار إظهار أو إخفاء رسومات التحذيرات (Warnings) على الخريطة.
 * **💾 تصدير الأخطاء لقاعدة بيانات جغرافية (Export to GDB):** إمكانية تصدير كافة الأخطاء المكتشفة بضغطة زر إلى Feature Dataset مستقل باسم `QC_Errors` داخل الـ Default Geodatabase للمشروع، مقسمة إلى Feature Classes بحسب نوع وشكل الخطأ مع كامل البيانات الوصفية وإضافتها للخريطة تلقائياً.
 * **📐 دقة فائقة تحت الملليمتر:** قياس المسافات الأقل من 1 سنتيمتر بوحدة الملليمتر (`mm`) بدقة حتى 3 و4 خانات عشرية (مثل `0.35 mm`) لمنع الرسائل الوهمية `0.00 cm`.
-* **🛡️ حماية نقاط الربط (Junction Guard) وفحص المنحنيات:** تمييز ذكي بين النقاط الزائدة على الاستقامة ونقاط التقاء المضلعات المجاورة لمنع الإنذارات الخاطئة، مع تدقيق المنحنيات الحقيقية (الأقواس الدائرية ومنحنيات بيزيير).
+* **🛡️ حماية نقاط الربط (Junction Guard) وتدقيق نقاط التماس بين الأقواس والخطوط:** تمييز ذكي بين النقاط الزائدة على الاستقامة ونقاط التقاء المضلعات المجاورة، مع خيار تدقيق إضافي تحذيري لنقاط التماس بين المنحنيات والخطوط المستقيمة (Arc–Line Junctions).
 * **🌓 دعم كامل للمظهرين الفاتح والداكن (Light & Dark Themes):** تصميم عصري يتكيف تلقائياً مع مظهر ArcGIS Pro.
 
 ---
@@ -117,15 +116,16 @@ For full mathematical equations and cadastral rationale, see [QC_CHECKS_LOGIC.md
 | # | اسم الفحص (Check Name) | الكود الداخلي | التفاوت الافتراضي | الوصف الهندسي |
 | :-: | :--- | :--- | :-: | :--- |
 | **1** | **Invalid Geometry** | `CHK_INVALID_GEOM` | — | كشف التقاطعات الذاتية (Bow-tie)، الحلقات غير المغلقة، الإحداثيات الشاذة (NaN)، والمضلعات غير القياسية. |
-| **2** | **Overlap** | `CHK_OVERLAP` | `0.0001 m²` | كشف المساحات المتداخلة بين المضلعات وتفكيك التداخلات المتعددة مع حساب المساحة بدقة بوحدة `m²` أو `cm²`. |
+| **2** | **Overlap** | `CHK_OVERLAP` | `0.00001 m²` | كشف المساحات المتداخلة بين المضلعات وتفكيك التداخلات المتعددة مع حساب المساحة بدقة بوحدة `m²` أو `cm²`. |
 | **3** | **Duplicate Geometry** | `CHK_DUPLICATE` | — | كشف المضلعات المتطابقة هندسياً بنسبة 100% المرسومة فوق بعضها ومنع احتسابها كتداخلات مكررة. |
-| **4** | **Enclosed Gap** | `CHK_GAP` | `0.001 m²` | كشف الفجوات والثقوب الهوائية المغلقة والمحصورة تماماً بين المضلعات المتجاورة. |
+| **4** | **Enclosed Gap** | `CHK_GAP` | `0.00001 m²` | كشف الفجوات والثقوب الهوائية المغلقة والمحصورة تماماً بين المضلعات المتجاورة. |
 | **5** | **Multi-Part Feature** | `CHK_MULTIPART` | — | كشف المعالم متعددة الأجزاء (Multipart) في الطبقات التي تشترط مضلعات أحادية مفردة (Singlepart). |
-| **6** | **Short Segment** | `CHK_SHORT_SEG` | `10.0 cm` | كشف الأضلاع والحدود متناهية الصغر التي يقل طولها عن الحد المسموح به. |
-| **7** | **Angle Issue** | `CHK_ANGLE` | `5.0°` | كشف الزوايا الحادة والشاذة جداً (Spikes) الناتجة عن أخطاء الرسم أو نقرات الماوس المزدوجة. |
-| **8** | **Snap Issue** | `CHK_SNAP` | `1.0 cm` | كشف الرؤوس المتقاربة غير الملتقطة بدقة أجزاء الملليمتر (`mm`) مع استبعاد النقاط المتطابقة تماماً. |
-| **9** | **Redundant Vertex** | `CHK_REDUNDANT` | `179.9°` | كشف الرؤوس الزائدة على خط الاستقامة (180°) والرؤوس غير الضرورية الواقعة على المنحنيات المتصلة (منحنى ← رأس ← منحنى) بتحليل هندسة المنحنيات (النوع، المركز، نصف القطر، المماسات) مع استثناء الانتقالات الصحيحة بين المنحنيات والخطوط وحماية نقاط الربط (Junction Guard). |
+| **6** | **Short Segment** | `CHK_SHORT_SEG` | `15.0 cm` | كشف الأضلاع والحدود متناهية الصغر التي يقل طولها عن الحد المسموح به. |
+| **7** | **Angle Issue** | `CHK_ANGLE` | `30.0°` | كشف الزوايا الحادة والشاذة (Spikes) الناتجة عن أخطاء الرسم أو نقرات الماوس. |
+| **8** | **Snap Issue** | `CHK_SNAP` | `15.0 cm` | كشف الرؤوس المتقاربة غير الملتقطة بدقة أجزاء الملليمتر (`mm`) مع استبعاد النقاط المتطابقة تماماً. |
+| **9** | **Redundant Vertex** | `CHK_REDUNDANT` | `175.0°` | كشف الرؤوس الزائدة على خط الاستقامة (180°) والرؤوس غير الضرورية الواقعة على المنحنيات المتصلة، مع حماية نقاط الربط (Junction Guard) وإمكانية تفعيل خيار التحذير لنقاط التماس بين المنحنيات والخطوط (Arc–Line). |
 | **10**| **Missing Junction** | `CHK_JUNCTION` | `10.0 cm` | كشف العقد المفقودة في الوصلات التبادلية (T-Junctions) عندما تلامس نقطة ضلع مضلع مجاور دون التقاط رأس مشترك. |
+| **11**| **Flat / Pseudo-Arc** | `CHK_FLAT_PSEUDO_ARC` | `0.01 cm` / `10.0 cm²` | *(اختياري - معطل افتراضياً)* كشف الأقواس الدائرية الوهمية والمنبسطة ذات سهم القوس الضئيل جداً ($\le 0.01\text{ cm} / 0.1\text{ mm}$) أو المساحة المحصورة ($\le 10.0\text{ cm}^2$) التي تمثل خطوطاً مستقيمة عملياً. |
 
 للاطلاع على الشرح الرياضي والمساحي المفصل، راجع: [QC_CHECKS_LOGIC.md](QC_CHECKS_LOGIC.md).
 

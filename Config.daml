@@ -10,7 +10,7 @@
   </AddInInfo>
 
   <modules>
-    <insertModule id="GeometryQC_Module" className="GeometryQCModule" autoLoad="true" caption="Geometry QC Module">
+    <insertModule id="GeometryQC_Module" className="GeometryQCModule" autoLoad="false" caption="Geometry QC Module">
 
       <!-- Controls -->
       <controls>
@@ -35,7 +35,7 @@
         <button id="GeometryQC_SettingsBtn" caption="Settings" className="UI.SettingsButton" loadOnClick="true"
                 smallImage="Images\QC_Settings16.png"
                 largeImage="Images\QC_Settings32.png">
-          <tooltip heading="QC Settings">Configure geometry check tolerances and trigger modes.<disabledText /></tooltip>
+          <tooltip heading="QC Settings">Configure geometry check tolerances and options.<disabledText /></tooltip>
         </button>
 
         <button id="GeometryQC_ClearBtn" caption="Clear Results" className="UI.ClearResultsButton" loadOnClick="true"

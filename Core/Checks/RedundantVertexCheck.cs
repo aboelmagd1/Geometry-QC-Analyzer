@@ -92,9 +92,15 @@ namespace GeometryQCAddIn.Core.Checks
                             bool segOutIsCurve = segOut?.IsCurve ?? false;
 
                             // Curve → Vertex → Line or Line → Vertex → Curve:
-                            // Valid transition between different segment types; do not flag as redundant.
+                            // Valid transition between different segment types; inspected only if FlagArcLineJunctions is enabled.
                             if (segInIsCurve != segOutIsCurve)
                             {
+                                if (context.Settings.FlagArcLineJunctions && segIn != null && segOut != null)
+                                {
+                                    InspectArcLineJunction(
+                                        f, v, partIdx, currPt, segIn, segOut, segInIsCurve,
+                                        context, sr, junctionTolCm, featurePartsMap, featureSegmentsMap, issues);
+                                }
                                 continue;
                             }
 
@@ -675,6 +681,120 @@ namespace GeometryQCAddIn.Core.Checks
             }
 
             return hasLegitimateJunction;
+        }
+
+        /// <summary>
+        /// Inspects a vertex where a curve segment meets a straight line segment.
+        /// If the curve and line are near-tangent (angle >= tolerance), flags it as a possible redundant vertex warning.
+        /// </summary>
+        private static void InspectArcLineJunction(
+            QCFeature f,
+            int v,
+            int partIdx,
+            MapPoint currPt,
+            Segment segIn,
+            Segment segOut,
+            bool segInIsCurve,
+            GeometryQCContext context,
+            SpatialReference? sr,
+            double junctionTolCm,
+            Dictionary<string, List<List<MapPoint>>> featurePartsMap,
+            Dictionary<string, List<List<Segment>>> featureSegmentsMap,
+            List<IssueResult> issues)
+        {
+            (double X, double Y) tIn;
+            (double X, double Y) tOut;
+            string curveType = "curve";
+
+            if (segInIsCurve)
+            {
+                // segIn is curve, segOut is line
+                if (segIn is EllipticArcSegment arcIn)
+                {
+                    tIn = GetEllipticArcTangent(arcIn, currPt);
+                    curveType = arcIn.IsCircular ? "circular arc" : "elliptic arc";
+                }
+                else if (segIn is CubicBezierSegment bezIn)
+                {
+                    double tinX = currPt.X - bezIn.ControlPoint2.X;
+                    double tinY = currPt.Y - bezIn.ControlPoint2.Y;
+                    if (tinX * tinX + tinY * tinY < 1e-12)
+                    {
+                        tinX = currPt.X - bezIn.ControlPoint1.X;
+                        tinY = currPt.Y - bezIn.ControlPoint1.Y;
+                    }
+                    tIn = (tinX, tinY);
+                    curveType = "bezier curve";
+                }
+                else
+                {
+                    return;
+                }
+
+                // segOut is straight line: outgoing direction
+                tOut = (segOut.EndPoint.X - segOut.StartPoint.X, segOut.EndPoint.Y - segOut.StartPoint.Y);
+            }
+            else
+            {
+                // segIn is line, segOut is curve
+                tIn = (segIn.EndPoint.X - segIn.StartPoint.X, segIn.EndPoint.Y - segIn.StartPoint.Y);
+
+                if (segOut is EllipticArcSegment arcOut)
+                {
+                    tOut = GetEllipticArcTangent(arcOut, currPt);
+                    curveType = arcOut.IsCircular ? "circular arc" : "elliptic arc";
+                }
+                else if (segOut is CubicBezierSegment bezOut)
+                {
+                    double toutX = bezOut.ControlPoint1.X - currPt.X;
+                    double toutY = bezOut.ControlPoint1.Y - currPt.Y;
+                    if (toutX * toutX + toutY * toutY < 1e-12)
+                    {
+                        toutX = bezOut.ControlPoint2.X - currPt.X;
+                        toutY = bezOut.ControlPoint2.Y - currPt.Y;
+                    }
+                    tOut = (toutX, toutY);
+                    curveType = "bezier curve";
+                }
+                else
+                {
+                    return;
+                }
+            }
+
+            double angle = ComputeVectorStraightAngle(tIn, tOut);
+            double threshold = context.Settings.ArcLineAngleToleranceDegrees;
+
+            if (angle >= threshold)
+            {
+                double tolMapUnits = UnitConverter.CentimetersToMapUnits(junctionTolCm, sr, currPt);
+                tolMapUnits = Math.Max(tolMapUnits, sr?.XYTolerance ?? 0.001);
+
+                if (IsJunctionVertex(f, currPt, threshold, context, tolMapUnits, featurePartsMap, featureSegmentsMap, out var coincidentOids))
+                {
+                    return;
+                }
+
+                string desc = (coincidentOids.Count > 0)
+                    ? $"Possible redundant vertex (arc–line junction): tangent angle is {angle:F3}° (Threshold: {threshold}°) between {curveType} and line at vertex {v + 1}, part {partIdx + 1} (coincident with Feature OID {string.Join(", ", coincidentOids)})."
+                    : $"Possible redundant vertex (arc–line junction): tangent angle is {angle:F3}° (Threshold: {threshold}°) between {curveType} and line at vertex {v + 1}, part {partIdx + 1}.";
+
+                issues.Add(new IssueResult
+                {
+                    CheckId = "CHK_REDUNDANT_ARCLINE",
+                    IssueType = "Possible redundant vertex (arc–line junction)",
+                    Oid = f.Oid,
+                    RelatedOids = coincidentOids,
+                    LayerName = f.LayerName,
+                    LayerUri = f.LayerUri,
+                    Location = currPt,
+                    IssueGeometry = currPt,
+                    Value = Math.Round(angle, 3),
+                    Unit = "deg",
+                    Description = desc,
+                    Severity = nameof(IssueSeverity.Warning)
+                });
+            }
         }
     }
 }

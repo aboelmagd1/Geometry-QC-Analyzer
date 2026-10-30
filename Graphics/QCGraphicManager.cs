@@ -56,8 +56,15 @@ namespace GeometryQCAddIn.Graphics
                 var mapView = MapView.Active;
                 if (mapView == null) return;
 
+                bool showWarnings = Config.GeometryQCSettings.Instance.ShowWarningsOnMap;
+
                 foreach (var issue in issues)
                 {
+                    if (!showWarnings && issue.Severity == nameof(IssueSeverity.Warning))
+                    {
+                        continue;
+                    }
+
                     var geom = issue.IssueGeometry ?? issue.Location;
                     if (geom == null || geom.IsEmpty) continue;
 

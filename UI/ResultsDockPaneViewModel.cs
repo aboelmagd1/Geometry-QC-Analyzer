@@ -59,6 +59,8 @@ namespace GeometryQCAddIn.UI
                 brush = new SolidColorBrush(Color.FromRgb(0, 220, 220)); // Cyan
             else if (id == "CHK_SNAP" || name.Contains("SNAP"))
                 brush = new SolidColorBrush(Color.FromRgb(30, 144, 255)); // Dodger Blue
+            else if (id == "CHK_REDUNDANT_ARCLINE" || name.Contains("ARC–LINE") || name.Contains("ARC-LINE"))
+                brush = new SolidColorBrush(Color.FromRgb(255, 127, 80)); // Coral / Amber-Orange Warning
             else if (id == "CHK_REDUNDANT" || name.Contains("REDUNDANT"))
                 brush = new SolidColorBrush(Color.FromRgb(128, 128, 128)); // Gray
             else if (id == "CHK_JUNCTION" || name.Contains("JUNCTION"))
@@ -94,56 +96,19 @@ namespace GeometryQCAddIn.UI
             {
                 if (SetProperty(ref _selectedLayer, value))
                 {
-                    NotifyPropertyChanged(nameof(LayerSelectionWarningText));
-                    NotifyPropertyChanged(nameof(HasLayerSelectionWarning));
-                }
-            }
-        }
-
-        public string CurrentModeDescription
-        {
-            get
-            {
-                return GeometryQCSettings.Instance.DataSource switch
-                {
-                    DataSourceMode.DisplayCache => "Display Cache (Selection in Viewport)",
-                    DataSourceMode.LiveQuery => "Live Query (Selection in Viewport)",
-                    DataSourceMode.RealGeometry => "Real Geometry (All Selected, Ignore Viewport)",
-                    DataSourceMode.EntireLayer => "Entire Layer (Local Layer Only)",
-                    _ => "Display Cache"
-                };
-            }
-        }
-
-        public bool IsEntireLayerSelected => GeometryQCSettings.Instance.DataSource == DataSourceMode.EntireLayer;
-
-        public string? LayerSelectionWarningText
-        {
-            get
-            {
-                if (IsEntireLayerSelected)
-                {
-                    if (SelectedLayer == null || SelectedLayer.IsAll)
+                    // Persist target layer selection into GeometryQCModule per project
+                    if (value == null || value.IsAll)
                     {
-                        return "⚠️ Entire Layer mode requires selecting a specific local polygon layer.";
+                        GeometryQCModule.Current.PersistedTargetLayerUri = null;
+                        GeometryQCModule.Current.PersistedTargetLayerName = null;
                     }
-                    if (!SelectedLayer.IsLocal)
+                    else
                     {
-                        return "⚠️ Selected layer is a Service layer. Entire Layer requires a local layer.";
+                        GeometryQCModule.Current.PersistedTargetLayerUri = value.Uri;
+                        GeometryQCModule.Current.PersistedTargetLayerName = value.DisplayName;
                     }
                 }
-                return null;
             }
-        }
-
-        public bool HasLayerSelectionWarning => !string.IsNullOrEmpty(LayerSelectionWarningText);
-
-        public void NotifyModeChanged()
-        {
-            NotifyPropertyChanged(nameof(CurrentModeDescription));
-            NotifyPropertyChanged(nameof(IsEntireLayerSelected));
-            NotifyPropertyChanged(nameof(LayerSelectionWarningText));
-            NotifyPropertyChanged(nameof(HasLayerSelectionWarning));
         }
 
         private ObservableCollection<IssueGroupViewModel> _issueGroups = new ObservableCollection<IssueGroupViewModel>();
@@ -184,7 +149,36 @@ namespace GeometryQCAddIn.UI
         public int TotalIssuesCount
         {
             get => _totalIssuesCount;
-            set => SetProperty(ref _totalIssuesCount, value);
+            set
+            {
+                if (SetProperty(ref _totalIssuesCount, value))
+                {
+                    NotifyPropertyChanged(nameof(IssuesBadgeText));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Header badge text showing categorized count (e.g. "3 errors · 2 warnings")
+        /// </summary>
+        public string IssuesBadgeText
+        {
+            get
+            {
+                if (TotalIssuesCount == 0) return "0 issues";
+
+                int errors = _currentIssues.Count(i => i.Severity == nameof(IssueSeverity.Error) || i.Severity == nameof(IssueSeverity.Critical));
+                int warnings = _currentIssues.Count(i => i.Severity == nameof(IssueSeverity.Warning));
+                int info = _currentIssues.Count(i => i.Severity == nameof(IssueSeverity.Info));
+
+                var parts = new List<string>();
+                if (errors > 0) parts.Add($"{errors} error{(errors > 1 ? "s" : "")}");
+                if (warnings > 0) parts.Add($"{warnings} warning{(warnings > 1 ? "s" : "")}");
+                if (info > 0) parts.Add($"{info} info");
+
+                if (parts.Count == 0) return $"{TotalIssuesCount} issues";
+                return string.Join(" · ", parts);
+            }
         }
 
         private bool _isBusyProcessing = false;
@@ -299,18 +293,23 @@ namespace GeometryQCAddIn.UI
                 }
             });
 
-            string? previousUri = SelectedLayer?.Uri;
-            bool previousWasAll = SelectedLayer == null || SelectedLayer.IsAll;
-
             AvailableLayers = new ObservableCollection<MapLayerItem>(layersList);
 
-            if (previousWasAll)
+            // Restore target layer: first check active in-memory selection, otherwise check module persisted state
+            string? targetUri = SelectedLayer?.Uri ?? GeometryQCModule.Current?.PersistedTargetLayerUri;
+            string? targetName = SelectedLayer?.DisplayName ?? GeometryQCModule.Current?.PersistedTargetLayerName;
+            bool wasAll = (SelectedLayer != null && SelectedLayer.IsAll) || (targetUri == null && targetName == null);
+
+            if (wasAll)
             {
                 SelectedLayer = AvailableLayers[0];
             }
             else
             {
-                var matched = AvailableLayers.FirstOrDefault(l => l.Uri == previousUri);
+                // Match by URI first, then by Name as fallback. If not found in current map, fall back quietly to All.
+                var matched = AvailableLayers.FirstOrDefault(l => !l.IsAll && l.Uri == targetUri)
+                           ?? AvailableLayers.FirstOrDefault(l => !l.IsAll && l.DisplayName == targetName);
+
                 SelectedLayer = matched ?? AvailableLayers[0];
             }
         }
@@ -333,32 +332,6 @@ namespace GeometryQCAddIn.UI
                 return;
             }
 
-            // Validation for EntireLayer mode
-            if (settings.DataSource == DataSourceMode.EntireLayer)
-            {
-                if (SelectedLayer == null || SelectedLayer.IsAll || string.IsNullOrEmpty(SelectedLayer.Uri))
-                {
-                    StatusText = "Entire Layer mode requires selecting a specific local polygon layer.";
-                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
-                        "Entire Layer mode requires choosing a specific polygon layer.\n\nPlease select a target layer from the Layer dropdown before running QC.",
-                        "Target Layer Required",
-                        System.Windows.MessageBoxButton.OK,
-                        System.Windows.MessageBoxImage.Warning);
-                    return;
-                }
-
-                if (!SelectedLayer.IsLocal)
-                {
-                    StatusText = $"Layer '{SelectedLayer.DisplayName}' is a Service Layer. Entire Layer mode only supports local layers.";
-                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
-                        $"The selected layer '{SelectedLayer.DisplayName}' is a Service/Web Layer.\n\nEntire Layer QC can only be executed on local data sources (e.g. File Geodatabase, Mobile Geodatabase, Shapefile, Enterprise Geodatabase).\n\nPlease select a local layer or change the Data Source Mode in Settings.",
-                        "Local Layer Required",
-                        System.Windows.MessageBoxButton.OK,
-                        System.Windows.MessageBoxImage.Warning);
-                    return;
-                }
-            }
-
             IsBusy = true;
             _progressService.Reset();
             _cts = new CancellationTokenSource();
@@ -368,21 +341,58 @@ namespace GeometryQCAddIn.UI
                 string? targetLayerUri = (SelectedLayer == null || SelectedLayer.IsAll) ? null : SelectedLayer.Uri;
                 var result = await _validator.RunValidationAsync(mapView, settings, targetLayerUri, _progressService, _cts.Token);
 
-                var groups = result.Issues
-                    .GroupBy(i => i.IssueType)
-                    .OrderBy(g => g.Key)
-                    .Select(g => new IssueGroupViewModel(g.Key, g))
-                    .ToList();
+                if (result.CapExceeded)
+                {
+                    // Cap exceeded: do not run, show clear message, clear old map graphics
+                    _currentIssues.Clear();
+                    IssueGroups.Clear();
+                    TotalIssuesCount = 0;
+                    NotifyPropertyChanged(nameof(IssuesBadgeText));
+                    StatusText = result.Message ?? "Selected features exceed maximum limit.";
+                    MetricsText = string.Empty;
+                    QCGraphicManager.Instance.ClearGraphics();
+                    return;
+                }
 
-                _currentIssues = result.Issues;
-                IssueGroups = new ObservableCollection<IssueGroupViewModel>(groups);
-                TotalIssuesCount = result.Issues.Count;
+                if (result.NothingSelected)
+                {
+                    // Nothing selected or all outside extent
+                    _currentIssues.Clear();
+                    IssueGroups.Clear();
+                    TotalIssuesCount = 0;
+                    NotifyPropertyChanged(nameof(IssuesBadgeText));
+                    StatusText = result.Message ?? "No polygon features selected.";
+                    MetricsText = string.Empty;
+                    QCGraphicManager.Instance.ClearGraphics();
+                    return;
+                }
 
                 if (result.Succeeded)
                 {
-                    StatusText = result.Message ?? $"Analysis complete. Found {result.Issues.Count} issues.";
+                    var groups = result.Issues
+                        .GroupBy(i => i.IssueType)
+                        .OrderBy(g => g.Key)
+                        .Select(g => new IssueGroupViewModel(g.Key, g))
+                        .ToList();
+
+                    _currentIssues = result.Issues;
+                    IssueGroups = new ObservableCollection<IssueGroupViewModel>(groups);
+                    TotalIssuesCount = result.Issues.Count;
+                    NotifyPropertyChanged(nameof(IssuesBadgeText));
+
                     MetricsText = $"Analyzed {result.Statistics.TotalFeaturesAnalyzed} features in {result.Statistics.ElapsedDuration.TotalSeconds:F2}s";
-                    await QCGraphicManager.Instance.RenderIssuesAsync(result.Issues);
+
+                    if (result.Issues.Count == 0)
+                    {
+                        // Zero errors found: clear old map graphics, show non-error message, keep metrics visible
+                        StatusText = "No errors found ✓";
+                        QCGraphicManager.Instance.ClearGraphics();
+                    }
+                    else
+                    {
+                        StatusText = result.Message ?? $"Analysis complete. Found {result.Issues.Count} issues.";
+                        await QCGraphicManager.Instance.RenderIssuesAsync(result.Issues);
+                    }
                 }
                 else
                 {
@@ -422,10 +432,19 @@ namespace GeometryQCAddIn.UI
             _currentIssues.Clear();
             IssueGroups.Clear();
             TotalIssuesCount = 0;
+            NotifyPropertyChanged(nameof(IssuesBadgeText));
             SelectedIssue = null;
             StatusText = "Results cleared. Ready for next analysis.";
             MetricsText = string.Empty;
             QCGraphicManager.Instance.ClearGraphics();
+        }
+
+        public void RefreshMapGraphics()
+        {
+            if (_currentIssues.Count > 0)
+            {
+                _ = QCGraphicManager.Instance.RenderIssuesAsync(_currentIssues);
+            }
         }
 
         public async Task ExportErrorsToGdbAsync()

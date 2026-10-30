@@ -34,17 +34,14 @@
                 
                 <CheckBox Content="Enable Geometry QC" IsChecked="{Binding IsQCEnabled}" Margin="0,3" Foreground="{DynamicResource PrimaryTextBrush}"/>
                 
-                <TextBlock Text="Data Source Mode:" Style="{DynamicResource BodyTextStyle}" Margin="0,8,0,2"/>
-                <RadioButton Content="Display Cache (In-Memory Selection, Default)" IsChecked="{Binding IsDisplayCacheMode}" Margin="8,2" Foreground="{DynamicResource PrimaryTextBrush}"/>
-                <RadioButton Content="Live Query (Feature Layer Filter)" IsChecked="{Binding IsLiveQueryMode}" Margin="8,2" Foreground="{DynamicResource PrimaryTextBrush}"/>
-                <RadioButton Content="Real Geometry (Selected Features, Ignore Viewport)" IsChecked="{Binding IsRealGeometryMode}" Margin="8,2" Foreground="{DynamicResource PrimaryTextBrush}" ToolTip="Analyzes true geometries directly from the layer for all selected features, even outside viewport"/>
-                <RadioButton Content="Entire Layer (Local Layer Only, All Features)" IsChecked="{Binding IsEntireLayerMode}" Margin="8,2" Foreground="{DynamicResource PrimaryTextBrush}" ToolTip="Analyzes all features in the selected local layer without requiring selection"/>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,4">
+                    <TextBlock Text="Max Features Cap: " Style="{DynamicResource SecondaryTextStyle}" VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding MaxFeaturesToProcess, UpdateSourceTrigger=PropertyChanged}" 
+                             ToolTip="Maximum number of selected features processed per run (Default: 500, Min: 1)" 
+                             Style="{DynamicResource ThemeAwareTextBoxStyle}" Width="70" Height="22"/>
+                </StackPanel>
 
-                <CheckBox Content="Enable for Service Layers" IsChecked="{Binding EnableForServiceLayers}" Margin="0,6,0,3" Foreground="{DynamicResource PrimaryTextBrush}"/>
-
-                <TextBlock Text="Trigger Mode:" Style="{DynamicResource BodyTextStyle}" Margin="0,8,0,2"/>
-                <RadioButton Content="Manual Run (Run button)" IsChecked="{Binding IsManualMode}" Margin="8,2" Foreground="{DynamicResource PrimaryTextBrush}"/>
-                <RadioButton Content="Auto-run on Selection Change" IsChecked="{Binding IsAutoRunMode}" Margin="8,2" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                <CheckBox Content="Enable for Service Layers" IsChecked="{Binding EnableForServiceLayers}" Margin="0,4,0,3" Foreground="{DynamicResource PrimaryTextBrush}"/>
 
                 <Separator Margin="0,12" Background="{DynamicResource BorderBrush}"/>
 
@@ -101,12 +98,35 @@
                     <TextBlock Text="Angle Threshold (deg): " Style="{DynamicResource SecondaryTextStyle}" VerticalAlignment="Center"/>
                     <TextBox Text="{Binding RedundantVertexAngleDegrees, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ThemeAwareTextBoxStyle}" Width="70" Height="22"/>
                 </StackPanel>
+                <StackPanel Margin="20,2,0,4">
+                    <CheckBox Content="Flag Arc–Line Tangent Junctions" IsChecked="{Binding FlagArcLineJunctions}" 
+                              ToolTip="When enabled, warns about vertices where a true curve meets a straight line with a near-tangent (collinear) angle." 
+                              Foreground="{DynamicResource PrimaryTextBrush}" Margin="0,2,0,2"/>
+                    <StackPanel Orientation="Horizontal" Margin="16,2,0,2" IsEnabled="{Binding FlagArcLineJunctions}">
+                        <TextBlock Text="Arc–Line Angle (deg): " Style="{DynamicResource SecondaryTextStyle}" VerticalAlignment="Center"/>
+                        <TextBox Text="{Binding ArcLineAngleToleranceDegrees, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource ThemeAwareTextBoxStyle}" Width="70" Height="22"/>
+                    </StackPanel>
+                    <CheckBox Content="Show Warnings on Map" IsChecked="{Binding ShowWarningsOnMap}" 
+                              ToolTip="Controls whether WARNING-level issues (such as arc–line junctions) are rendered as map overlay graphics." 
+                              Foreground="{DynamicResource PrimaryTextBrush}" Margin="0,2,0,2"/>
+                </StackPanel>
 
                 <!-- 10. Missing Junction Vertices -->
                 <CheckBox Content="10. Missing Junction Vertices" IsChecked="{Binding CheckMissingJunctions}" Margin="0,4,0,2" FontWeight="Medium" Foreground="{DynamicResource PrimaryTextBrush}"/>
                 <StackPanel Orientation="Horizontal" Margin="20,0,0,4">
                     <TextBlock Text="Tolerance (cm): " Style="{DynamicResource SecondaryTextStyle}" VerticalAlignment="Center"/>
                     <TextBox Text="{Binding MissingJunctionToleranceCm, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search tolerance in centimeters (Default: 10 cm. E.g. 10 cm = 0.10 m)" Style="{DynamicResource ThemeAwareTextBoxStyle}" Width="70" Height="22"/>
+                </StackPanel>
+
+                <!-- 11. Flat / Pseudo-Arcs -->
+                <CheckBox Content="11. Flat / Pseudo-Arcs" IsChecked="{Binding CheckFlatPseudoArcs}" Margin="0,4,0,2" FontWeight="Medium" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                <StackPanel Orientation="Horizontal" Margin="20,0,0,2" IsEnabled="{Binding CheckFlatPseudoArcs}">
+                    <TextBlock Text="Max Sagitta (cm): " Style="{DynamicResource SecondaryTextStyle}" VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding FlatArcSagittaToleranceCm, UpdateSourceTrigger=PropertyChanged}" ToolTip="Maximum sagitta / arc height in cm (Default: 0.01 cm = 0.1 mm)" Style="{DynamicResource ThemeAwareTextBoxStyle}" Width="70" Height="22"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="20,0,0,4" IsEnabled="{Binding CheckFlatPseudoArcs}">
+                    <TextBlock Text="Max Area (sq cm): " Style="{DynamicResource SecondaryTextStyle}" VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding FlatArcAreaToleranceCm2, UpdateSourceTrigger=PropertyChanged}" ToolTip="Maximum enclosed circular segment area in sq cm (Default: 10.0 sq cm)" Style="{DynamicResource ThemeAwareTextBoxStyle}" Width="70" Height="22"/>
                 </StackPanel>
 
             </StackPanel>

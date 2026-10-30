@@ -19,6 +19,8 @@ namespace GeometryQCAddIn.Core
         public List<IssueResult> Issues { get; } = new List<IssueResult>();
         public QCStatistics Statistics { get; } = new QCStatistics();
         public bool Succeeded { get; set; }
+        public bool CapExceeded { get; set; }
+        public bool NothingSelected { get; set; }
         public string? Message { get; set; }
     }
 
@@ -44,7 +46,8 @@ namespace GeometryQCAddIn.Core
                 new AngleIssueCheck(),
                 new SnapIssueCheck(),
                 new RedundantVertexCheck(),
-                new JunctionVertexCheck()
+                new JunctionVertexCheck(),
+                new FlatPseudoArcCheck()
             };
         }
 
@@ -59,7 +62,7 @@ namespace GeometryQCAddIn.Core
             var stats = result.Statistics;
             stats.StartTime = DateTime.Now;
 
-            LoggingService.Info($"QC Run initiated. Data Source Mode: {settings.DataSource}, Target Layer: {targetLayerUri ?? "<All>"}");
+            LoggingService.Info($"QC Run initiated. Target Layer: {targetLayerUri ?? "<All>"}");
 
             if (mapView == null || mapView.Map == null)
             {
@@ -73,15 +76,8 @@ namespace GeometryQCAddIn.Core
                 progressService?.Report(5.0, "Acquiring selected polygon features...");
                 var swAcquisition = Stopwatch.StartNew();
 
-                // Step 1: Data Acquisition based on configured DataSource Mode
-                GeometryDataProvider provider = settings.DataSource switch
-                {
-                    DataSourceMode.LiveQuery => new LiveQueryProvider(),
-                    DataSourceMode.RealGeometry => new RealGeometryProvider(),
-                    DataSourceMode.EntireLayer => new EntireLayerProvider(),
-                    _ => new DisplayCacheProvider()
-                };
-
+                // Step 1: Data Acquisition via Display Cache Provider
+                GeometryDataProvider provider = new DisplayCacheProvider();
                 var acqResult = await provider.AcquireFeaturesAsync(mapView, settings, targetLayerUri, cancellationToken);
                 swAcquisition.Stop();
                 stats.GeometryAcquisitionTime = swAcquisition.Elapsed;
@@ -92,28 +88,25 @@ namespace GeometryQCAddIn.Core
                     LoggingService.Warning(warn);
                 }
 
+                // Check selection cap
+                if (acqResult.CapExceeded)
+                {
+                    stats.EndTime = DateTime.Now;
+                    result.Succeeded = false;
+                    result.CapExceeded = true;
+                    result.Message = $"Selected {acqResult.TotalSelectedCount:N0} features; limit is {settings.MaxFeaturesToProcess:N0}. Reduce the selection or raise the limit in Settings.";
+                    LoggingService.Warning(result.Message);
+                    return result;
+                }
+
                 if (acqResult.Features.Count == 0)
                 {
                     stats.EndTime = DateTime.Now;
                     result.Succeeded = true;
-                    if (settings.DataSource == DataSourceMode.EntireLayer)
-                    {
-                        result.Message = acqResult.Warnings.Count > 0
-                            ? acqResult.Warnings[0]
-                            : "The selected layer contains no polygon features to analyze.";
-                    }
-                    else if (settings.DataSource == DataSourceMode.RealGeometry)
-                    {
-                        result.Message = acqResult.TotalSelectedCount == 0
-                            ? "No polygon features selected. Please select one or more polygon features and run QC."
-                            : "Selected features had empty or unreadable geometry in the data source.";
-                    }
-                    else
-                    {
-                        result.Message = acqResult.TotalSelectedCount == 0
-                            ? "No polygon features selected. Please select one or more polygon features and run QC."
-                            : "Selected polygon features are outside current map view extent.";
-                    }
+                    result.NothingSelected = true;
+                    result.Message = acqResult.TotalSelectedCount == 0
+                        ? "No polygon features selected. Please select one or more polygon features and run QC."
+                        : "Selected polygon features are outside current map view extent.";
                     LoggingService.Info(result.Message);
                     return result;
                 }
@@ -202,7 +195,9 @@ namespace GeometryQCAddIn.Core
 
                 progressService?.Report(100.0, $"QC Analysis completed. Found {result.Issues.Count} verified issues.");
                 result.Succeeded = true;
-                result.Message = stats.GetSummaryString();
+                result.Message = result.Issues.Count == 0
+                    ? "No errors found ✓"
+                    : stats.GetSummaryString();
                 LoggingService.Info(result.Message);
             }
             catch (OperationCanceledException)

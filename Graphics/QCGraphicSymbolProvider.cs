@@ -75,10 +75,20 @@ namespace GeometryQCAddIn.Graphics
                     return SymbolFactory.Instance.ConstructPointSymbol(
                         CIMColor.CreateRGBColor(128, 128, 128), 7.0, SimpleMarkerStyle.Square);
 
+                case "CHK_REDUNDANT_ARCLINE":
+                    // Warning Coral triangle point symbol (distinct from Gray redundant square)
+                    return SymbolFactory.Instance.ConstructPointSymbol(
+                        CIMColor.CreateRGBColor(255, 127, 80), 9.0, SimpleMarkerStyle.Triangle);
+
                 case "CHK_JUNCTION":
                     // Magenta star / cross point symbol
                     return SymbolFactory.Instance.ConstructPointSymbol(
                         CIMColor.CreateRGBColor(255, 0, 255), 11.0, SimpleMarkerStyle.X);
+
+                case "CHK_FLAT_PSEUDO_ARC":
+                    // Warning Teal dashed line symbol for flat pseudo-arcs
+                    return SymbolFactory.Instance.ConstructLineSymbol(
+                        CIMColor.CreateRGBColor(0, 206, 209), 3.0, SimpleLineStyle.Dash);
 
                 default:
                     return SymbolFactory.Instance.ConstructPointSymbol(

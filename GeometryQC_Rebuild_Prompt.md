@@ -53,19 +53,19 @@ QC Preview V01/
 │   │   ├── ShortSegmentCheck.cs               # CHK_SHORT_SEG
 │   │   ├── AngleIssueCheck.cs                 # CHK_ANGLE
 │   │   ├── SnapIssueCheck.cs                  # CHK_SNAP
-│   │   ├── RedundantVertexCheck.cs            # CHK_REDUNDANT (Curves & Junction Guard)
+│   │   ├── RedundantVertexCheck.cs            # CHK_REDUNDANT (Curves, Arc–Line, & Junction Guard)
 │   │   └── JunctionVertexCheck.cs             # CHK_JUNCTION (T-Junctions)
-│   ├── DisplayCacheProvider.cs                # Ultra-fast viewport display cache reader
-│   ├── EntireLayerProvider.cs                 # Full local layer provider (all features, no selection required)
+│   ├── DisplayCacheProvider.cs                # Viewport display cache reader with feature cap protection
 │   ├── GeometryDataProvider.cs                # Base provider abstraction
 │   ├── GeometryHelpers.cs                     # Angle calculation & sub-millimeter metrics
 │   ├── GeometryQCContext.cs                   # Execution context (Spatial Reference, Index, Features)
 │   ├── GeometryValidator.cs                   # Orchestrator & Deduplication engine
-│   ├── LiveQueryProvider.cs                   # Fresh layer query provider via SearchCursor (extent-filtered)
-│   ├── RealGeometryProvider.cs                # Direct FeatureClass reader for selected features (ignores viewport)
 │   ├── SpatialIndex.cs                        # 2D Bounding-Box Grid Spatial Hash
 │   ├── UnitConverter.cs                       # Coordinate unit normalization (metric/degrees)
 │   └── VertexIndex.cs                         # Sub-millimeter Point Spatial Hash
+├── Graphics/
+│   ├── QCGraphicManager.cs                    # Temporary map overlay manager (supports warning suppression)
+│   └── QCGraphicSymbolProvider.cs             # CIM symbols for issue rendering (including Arc-Line triangle)
 ├── Models/
 │   ├── IssueResult.cs                         # Issue data model with metric formatting
 │   ├── IssueSeverity.cs                       # Enum: Error, Warning, Info
@@ -75,9 +75,8 @@ QC Preview V01/
 ├── Services/
 │   ├── GdbExportService.cs                    # Export issues to GDB Feature Dataset
 │   ├── LoggingService.cs                      # Diagnostic logging service
-│   ├── MapViewService.cs                      # Map panning & graphics overlay engine
+│   ├── MapViewService.cs                      # Map panning & navigation engine
 │   ├── ProgressService.cs                     # Task cancellation & progress reporting
-│   ├── SelectionService.cs                    # Active map polygon selection listener
 │   └── ThemeService.cs                        # ArcGIS Pro Light/Dark theme synchronizer
 ├── UI/
 │   ├── Buttons.cs                             # Ribbon Button definitions
@@ -121,20 +120,22 @@ QC Preview V01/
       <Subject>Geometry Quality Control</Subject>
     </AddInInfo>
   ```
-* **Module Auto-Loading:** Set `<insertModule autoLoad="true">` to guarantee background services initialize at application startup.
+* **Module Packaging Rules:** Set `<insertModule autoLoad="false">` per ArcGIS Pro best practices. Background services initialize on demand when the dockpane is opened or QC is run.
 * **Ribbon Tab & Groups:**
   - Tab: `GeometryQC_Tab` ("Geometry QC")
-  - Group 1: `GeometryQC_MainGroup` ("Validation", `appearsOnAddInTab="true"`)
+  - Group 1: `GeometryQC_MainGroup` ("Validation", `appearsOnAddInTab="false"`)
     - `GeometryQC_ToggleBtn` (Large, `QC_Toggle_ON32.png`)
     - `GeometryQC_RunBtn` (Large, `QC_Run32.png`)
     - `GeometryQC_ClearBtn` (Middle, `QC_Clear16.png`)
     - `GeometryQC_CancelBtn` (Middle, `QC_Cancel16.png`)
-  - Group 2: `GeometryQC_PanelsGroup` ("Panels", `appearsOnAddInTab="true"`)
+  - Group 2: `GeometryQC_PanelsGroup` ("Panels", `appearsOnAddInTab="false"`)
     - `GeometryQC_ResultsBtn` (Large, `QC_Results32.png`)
     - `GeometryQC_SettingsBtn` (Large, `QC_Settings32.png`)
 * **DockPanes:**
-  - `GeometryQC_ResultsDockPane`: Docked on right, class `ResultsDockPaneViewModel`.
-  - `GeometryQC_SettingsDockPane`: Docked on right, class `SettingsDockPaneViewModel`.
+  - `GeometryQC_ResultsDockPane`: Docked on right, class `ResultsDockPaneViewModel`. Displays real-time validation results, grouped by severity/check, dynamic badge count, "No errors found ✓", and layer dropdown with per-project persistence.
+  - `GeometryQC_SettingsDockPane`: Docked on right, class `SettingsDockPaneViewModel`. Manages tolerances, feature cap limit, arc–line junction options, and map warning overlays.
+* **Per-Project Layer Persistence:**
+  - `GeometryQCModule` overrides `OnWriteSettingsAsync(ModuleSettingsWriter)` and `OnReadSettingsAsync(ModuleSettingsReader)` to persist the active target layer's URI and name into the `.aprx` project file.
 
 ---
 
@@ -147,11 +148,9 @@ QC Preview V01/
 2. **`VertexIndex.cs` (Point Spatial Hash):**
    - Indexes all vertices across polygon rings using spatial hashing with cell size equal to tolerance (e.g., 1 cm).
    - Allows instant $O(1)$ neighborhood vertex queries for sub-millimeter snap checks and junction detection.
-3. **Data Providers (`GeometryDataProvider.cs`):**
-   - **`DisplayCacheProvider`:** Reads rendered screen graphics directly from ArcGIS Pro MapView display cache for instant preview of selected features within viewport.
-   - **`LiveQueryProvider`:** Uses `FeatureClass.Search(...)` within `QueuedTask` constrained by map view extent and selection.
-   - **`RealGeometryProvider`:** Queries true, unclipped geometries directly from underlying `FeatureClass` for all selected features in safe batches of 1000 OIDs, regardless of whether they are visible in the active viewport.
-   - **`EntireLayerProvider`:** Queries all polygon features across a specified local layer (Geodatabase, Shapefile) without requiring selection. Strictly enforces local data source safety (`!GeometryHelpers.IsServiceLayer(layer)`) and prevents running without a target layer.
+3. **Data Acquisition (`DisplayCacheProvider.cs`):**
+   - Reads rendered screen graphics directly from ArcGIS Pro MapView display cache for instant preview of selected features within viewport.
+   - **Feature Cap Protection (`MaxFeaturesToProcess`, default 500):** Pre-checks the selected feature count before acquisition. If exceeded, safely cancels the run and alerts the user to reduce selection or raise the limit in Settings.
 
 ---
 
@@ -162,31 +161,34 @@ Each check implements `IGeometryCheck` and executes asynchronously with a `Cance
 1. **Invalid Geometry (`CHK_INVALID_GEOM`, Error):**
    - Executes `GeometryEngine.Instance.Simplify()`. If geometry changes or is null, flags error.
    - Checks for non-positive area, ring point count $< 3$, and `double.IsNaN` in coordinates.
-2. **Overlap (`CHK_OVERLAP`, Error, default 0.0001 m²):**
+2. **Overlap (`CHK_OVERLAP`, Error, default 0.00001 m² / 100 cm²):**
    - Uses `SpatialIndex` to find candidate overlapping pairs.
    - Computes `GeometryEngine.Instance.Intersection(polyA, polyB)`.
-   - Decomposes multipart intersections into singlepart polygons; calculates area in m² or cm²; eliminates boundary touch slivers.
+   - Decomposes multipart intersections into singlepart polygons; calculates area in m² or cm²; eliminates boundary touch slivers via minimum thickness guard.
 3. **Duplicate Geometry (`CHK_DUPLICATE`, Warning):**
    - Fast spatial vertex hash comparison followed by `GeometryEngine.Instance.Equals()`.
    - Suppresses redundant overlap reporting for identical features.
-4. **Enclosed Gap (`CHK_GAP`, Warning, default 0.001 m²):**
+4. **Enclosed Gap (`CHK_GAP`, Warning, default 0.00001 m² / 100 cm²):**
    - Computes geometric union of adjacent polygons, identifies interior holes/rings that do not touch the exterior boundary, and flags areas above tolerance.
 5. **Multi-Part Feature (`CHK_MULTIPART`, Info):**
    - Inspects `poly.PartCount > 1` in datasets requiring singlepart polygons.
-6. **Short Segment (`CHK_SHORT_SEG`, Warning, default 0.10 m = 10 cm):**
+6. **Short Segment (`CHK_SHORT_SEG`, Warning, default 0.15 m = 15.0 cm):**
    - Traverses polygon boundary segments. Flags segment length $< \text{tolerance}$, excluding coincident points ($d < 10^{-6}$).
-7. **Angle Issue (`CHK_ANGLE`, Warning, default 5.0°):**
-   - Traverses consecutive vertex triplets on each ring. Computes interior angle; flags extreme spikes and needles $< 5.0°$.
-8. **Snap Issue (`CHK_SNAP`, Warning, default 0.01 m = 1.0 cm):**
+7. **Angle Issue (`CHK_ANGLE`, Warning, default 30.0°):**
+   - Traverses consecutive vertex triplets on each ring. Computes interior angle; flags extreme spikes and needles $< 30.0°$.
+8. **Snap Issue (`CHK_SNAP`, Warning, default 0.15 m = 15.0 cm):**
    - Uses `VertexIndex` to find vertices from different features separated by $0 < d \le \text{tolerance}$.
    - Sub-millimeter reporting: If $d < 0.01\text{ m}$, outputs metric in millimeters (`mm`) with up to 4 decimal places (e.g., `0.04 mm`). Excludes identical vertices ($d < 10^{-5}\text{ m}$).
-9. **Redundant Vertex (`CHK_REDUNDANT`, Info, default 179.9°):**
-   - **Straight Edges:** Flags collinear vertices along straight lines where angle $\ge 179.9°$.
+9. **Redundant Vertex (`CHK_REDUNDANT`, Info, default 175.0°):**
+   - **Straight Edges:** Flags collinear vertices along straight lines where angle $\ge 175.0°$.
    - **Parametric True Curves (Circular Arcs & Cubic Béziers):**
      - Extracts segment parts via `GeometryHelpers.ExtractPartsSegments()`.
-     - Preserves valid transitions: Line $\leftrightarrow$ Curve and Arc $\leftrightarrow$ Bézier transitions are strictly protected and never flagged.
-     - **Circular Arcs:** Tests center coincidence, radius match, orientation consistency (both CW or CCW), and tangent angle $\ge 179.9°$.
-     - **Cubic Béziers:** Tests $C^1$ tangent angle continuity $\ge 179.9°$ and $C^2$ second derivative curvature consistency. Kinks and inflection points are preserved.
+     - Preserves valid transitions: Line $\leftrightarrow$ Curve and Arc $\leftrightarrow$ Bézier transitions are strictly protected.
+     - **Circular Arcs:** Tests center coincidence, radius match, orientation consistency (both CW or CCW), and tangent angle $\ge 175.0°$.
+     - **Cubic Béziers:** Tests $C^1$ tangent angle continuity $\ge 175.0°$ and $C^2$ second derivative curvature consistency. Kinks and inflection points are preserved.
+   - **Optional Arc–Line Junction Check (`CHK_REDUNDANT_ARCLINE`, Warning, default 175.0°, disabled by default):**
+     - When `FlagArcLineJunctions = true`, tests tangent deflection angle where a straight segment meets a circular arc or Bézier curve. If deflection angle $\ge \text{ArcLineAngleToleranceDegrees}$ (default 175.0°), flags vertex as possible redundant arc–line transition.
+     - Rendered with Coral triangle CIM symbol. Can be toggled on/off in map graphics via `ShowWarningsOnMap`.
    - **Junction Guard:** Protects vertices that coincide with vertices of adjacent polygons where the neighbor bends or forms a legitimate transition. If both coincident vertices along a shared boundary are redundant, flags both.
 10. **Missing Junction (`CHK_JUNCTION`, Warning, default 0.10 m = 10 cm):**
     - Identifies T-junctions where a vertex on polygon A touches an edge of polygon B, but polygon B lacks a matching snapped vertex.
@@ -243,9 +245,10 @@ For comprehensive mathematical proofs and cadastral rationale, see [QC_CHECKS_LO
 ## 4. Mandatory Architectural Rules & Constraints
 
 1. **Button Constructor Rule:** Every button class inheriting from `ArcGIS.Desktop.Framework.Contracts.Button` must explicitly call `Enabled = true;` in its parameterless constructor.
-2. **AutoLoad Rule:** In `Config.daml`, `<insertModule>` must have `autoLoad="true"` to ensure `ThemeService` and background listeners activate immediately.
+2. **AutoLoad Rule:** In `Config.daml`, `<insertModule>` must have `autoLoad="false"` per ArcGIS Pro add-in best practices.
 3. **No Hot-Reloading:** ArcGIS Pro only reads add-in assemblies at startup. Always alert the user to close and restart ArcGIS Pro after any installation or build.
 4. **Read-Only Safety:** The Add-In must never start an editing transaction (`EditOperation`) on the source layers.
+5. **Feature Cap Protection:** The DisplayCacheProvider enforces `MaxFeaturesToProcess` (default 500) to safeguard application responsiveness during selection processing.
 
 ---
 ---
@@ -271,33 +274,32 @@ For comprehensive mathematical proofs and cadastral rationale, see [QC_CHECKS_LO
 
 ## 2. الهيكلية المعمارية للمجلدات والكود
 
-1. **`Config.daml`:** ملف التكوين الإعلاني لـ ArcGIS Pro متوافق تماماً مع مخطط `http://Config.xsd` وضبط `desktopVersion="3.0"` وتفعيل `autoLoad="true"`.
-2. **`Core/`:** محركات الفحص ومزودات جلب البيانات:
-   - `DisplayCacheProvider.cs`: كاش العرض اللحظي فائق السرعة للتحديد داخل الشاشة.
-   - `LiveQueryProvider.cs`: استعلام مباشر من الطبقة مقيد بنطاق الشاشة والتحديد.
-   - `RealGeometryProvider.cs`: استعلام الأشكال الهندسية الحقيقية الأصلية للتحديد كاملاً دون تقييد بنطاق الشاشة (Ignore Viewport).
-   - `EntireLayerProvider.cs`: فحص كامل معالم الطبقة دون اشتراط التحديد، مقتصر على الطبقات المحلية (Local Geodatabases / Shapefiles).
-   - `GeometryValidator.cs`: محرك التنسيق واقتطاع التقاطعات وإزالة التكرار.
-3. **`Core/Checks/`:** مجلد الفحوصات الهندسية العشرة المستقلة المشتقة من واجهة `IGeometryCheck`.
-4. **`Core/SpatialIndex.cs` & `VertexIndex.cs`:** محركات الفهرسة المكانية بالذاكرة لتسريع المقارنات من $O(N^2)$ إلى سرعات لحظية.
-5. **`Services/GdbExportService.cs`:** خدمة تصدير الأخطاء إلى قاعدة البيانات الافتراضية داخل Feature Dataset مخصص باسم `QC_Errors`.
-6. **`UI/ResultsDockPane` & `SettingsDockPane`:** لوحات التحكم الجانبية المبنية بتقنية WPF مع مؤشر النمط وتنبيهات الطبقات ودعم المظهر الفاتح والداكن.
-7. **`package.ps1` & `csproj`:** سكريبتات التجميع والنشر التلقائي لمجلد إضافات المستخدم مع مسح كاش الـ `AssemblyCache`.
+1. **`Config.daml`:** ملف التكوين الإعلاني لـ ArcGIS Pro متوافق تماماً مع مخطط `http://Config.xsd` وضبط `desktopVersion="3.0"` وضبط `autoLoad="false"`.
+2. **`GeometryQCModule.cs`:** فئة الوحدة الرئيسية التي ترث من `Module` وتدير حفظ واسترجاع إعدادات المشروع (`TargetLayerUri` و `TargetLayerName`) عبر `OnWriteSettingsAsync` و `OnReadSettingsAsync`.
+3. **`Core/`:** محركات الفحص ومزودات جلب البيانات:
+   - `DisplayCacheProvider.cs`: كاش العرض اللحظي فائق السرعة للتحديد داخل الشاشة مع حماية سقف عدد المعالم (`MaxFeaturesToProcess` = 500).
+   - `GeometryValidator.cs`: محرك التنسيق واقتطاع التقاطعات وإزالة التكرار مع إرجاع علامة النجاح التام "No errors found ✓".
+4. **`Core/Checks/`:** مجلد الفحوصات الهندسية العشرة المستقلة المشتقة من واجهة `IGeometryCheck`.
+5. **`Core/SpatialIndex.cs` & `VertexIndex.cs`:** محركات الفهرسة المكانية بالذاكرة لتسريع المقارنات من $O(N^2)$ إلى سرعات لحظية.
+6. **`Graphics/`:** إدارة الرسومات المؤقتة على الخريطة (`QCGraphicManager.cs`) مع خيار إخفاء/إظهار التحذيرات، والرموز الرسومية CIM (`QCGraphicSymbolProvider.cs`).
+7. **`Services/GdbExportService.cs`:** خدمة تصدير الأخطاء إلى قاعدة البيانات الافتراضية داخل Feature Dataset مخصص باسم `QC_Errors`.
+8. **`UI/ResultsDockPane` & `SettingsDockPane`:** لوحات التحكم الجانبية المبنية بتقنية WPF مع شارة إحصائيات الأخطاء والتحذيرات ودعم المظهر الفاتح والداكن وحفظ الطبقة لكل مشروع.
+9. **`package.ps1` & `csproj`:** سكريبتات التجميع والنشر التلقائي لمجلد إضافات المستخدم مع مسح كاش الـ `AssemblyCache`.
 
 ---
 
 ## 3. الفحوصات الهندسية العشرة بالتفصيل
 
 1. **فحص سلامة المضلع (Invalid Geometry):** استدعاء `Simplify()` والتحقق من الحلقات العكسية والتقاطعات الذاتية والإحداثيات غير المعرفة.
-2. **فحص التداخل (Overlap):** استخدام الفهرس المكاني لاقتطاع التقاطعات وحساب المساحة بدقة بالمتر المربع أو السنتيمتر المربع مع تفكيك الأجزاء المتعددة.
+2. **فحص التداخل (Overlap):** استخدام الفهرس المكاني لاقتطاع التقاطعات وحساب المساحة بدقة بالمتر المربع أو السنتيمتر المربع مع تفكيك الأجزاء المتعددة (التفاوت الافتراضي: `0.00001 m²` / `100 cm²`).
 3. **فحص التطابق المكرر (Duplicate Geometry):** فحص المضلعات المتطابقة بنسبة 100% لمنع تكرار تقريرها كتداخل.
-4. **فحص الفجوات الهوائية (Enclosed Gap):** كشف الفراغات المغلقة المحصورة بالكامل بين المضلعات المتجاورة.
+4. **فحص الفجوات الهوائية (Enclosed Gap):** كشف الفراغات المغلقة المحصورة بالكامل بين المضلعات المتجاورة (التفاوت الافتراضي: `0.00001 m²` / `100 cm²`).
 5. **فحص تعدد الأجزاء (Multi-Part Feature):** كشف المعالم التي تتكون من أكثر من جزء منفصل (`PartCount > 1`).
-6. **فحص الأضلاع القصيرة (Short Segment):** رصد الحدود متناهية الصغر الأقل من التفاوت (افتراضياً 10 سم).
-7. **فحص الزوايا الحادة (Angle Issue):** كشف الإبر والزوايا الحادة الشاذة الأقل من 5 درجات.
-8. **فحص عدم الالتقاط (Snap Issue):** رصد الرؤوس المتقاربة غير الملتقطة مع قياس المسافة بدقة الملليمتر (`mm`) حتى 4 خانات عشرية للمسافات الأقل من 1 سم.
-9. **فحص الرؤوس الزائدة (Redundant Vertex):** كشف الرؤوس التي تقع على استقامة الخط (180°)، وتحليل المنحنيات الحقيقية (الأقواس الدائرية ومنحنيات بيزيير) للتأكد من تطابق المركز ونصف القطر واستمرارية المماسات والانحناء ($C^1/C^2$)، مع ميزة **حارس نقاط الربط (Junction Guard)** الذكية لحماية نقاط الربط بين المضلعات المتجاورة.
-10. **فحص العقد المفقودة (Missing Junction):** رصد نقاط التماس (T-Junctions) التي تلامس ضلع مضلع مجاور دون وجود رأس ملتقط عليها.
+6. **فحص الأضلاع القصيرة (Short Segment):** رصد الحدود متناهية الصغر الأقل من التفاوت (التفاوت الافتراضي: `15.0 cm`).
+7. **فحص الزوايا الحادة (Angle Issue):** كشف الإبر والزوايا الحادة الشاذة الأقل من 30 درجة (التفاوت الافتراضي: `30.0°`).
+8. **فحص عدم الالتقاط (Snap Issue):** رصد الرؤوس المتقاربة غير الملتقطة مع قياس المسافة بدقة الملليمتر (`mm`) حتى 4 خانات عشرية للمسافات الأقل من 1 سم (التفاوت الافتراضي: `15.0 cm`).
+9. **فحص الرؤوس الزائدة (Redundant Vertex):** كشف الرؤوس التي تقع على استقامة الخط (≥ 175°)، وتحليل المنحنيات الحقيقية (الأقواس الدائرية ومنحنيات بيزيير) للتأكد من تطابق المركز ونصف القطر واستمرارية المماسات والانحناء ($C^1/C^2$)، وفحص اختياري لالتقاء القوس والخط المماس (`CHK_REDUNDANT_ARCLINE` كمستوى تحذير برمز مثلث مرجاني)، مع ميزة **حارس نقاط الربط (Junction Guard)** الذكية لحماية نقاط الربط بين المضلعات المتجاورة.
+10. **فحص العقد المفقودة (Missing Junction):** رصد نقاط التماس (T-Junctions) التي تلامس ضلع مضلع مجاور دون وجود رأس ملتقط عليها (التفاوت الافتراضي: `10.0 cm`).
 
 للاطلاع على الشرح الرياضي والمساحي المفصل لكافة الخوارزميات، راجع: [QC_CHECKS_LOGIC.md](QC_CHECKS_LOGIC.md).
 
@@ -316,9 +318,10 @@ For comprehensive mathematical proofs and cadastral rationale, see [QC_CHECKS_LO
 ## 5. قواعد التنفيذ الإلزامية
 
 1. **تفعيل الأزرار برمجياً:** يجب على جميع فئات الأزرار المشتقة من `ArcGIS.Desktop.Framework.Contracts.Button` كتابة `Enabled = true;` في المشيد (Constructor).
-2. **التشغيل التلقائي:** ضبط `autoLoad="true"` في `Config.daml`.
+2. **ضبط التعبئة:** ضبط `autoLoad="false"` في `Config.daml`.
 3. **عدم دعم التحديث المباشر (No Hot-Reload):** تنبيه المستخدم دائماً بضرورة إغلاق وتشغيل ArcGIS Pro لقراءة أي تحديثات برمجية.
 4. **القراءة فقط:** الامتناع التام عن بدء أي عمليات تعديل (`EditOperation`) على طبقات المصدر الأصلية.
+5. **سقف عدد المعالم:** تطبيق حد أقصى للمعالم المحددة (`MaxFeaturesToProcess` = 500) لمنع استنزاف موارد النظام وضمان الاستجابة اللحظية.
 
 ---
 *تم إعداد هذه الوثيقة كمرجع تقني وهندسي معتمد لبناء وتطوير إضافة Geometry QC Analyzer.*

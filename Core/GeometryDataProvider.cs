@@ -17,6 +17,7 @@ namespace GeometryQCAddIn.Core
         public int TotalSelectedCount { get; set; }
         public int ExtentFilteredCount { get; set; }
         public int UnavailableGeometriesCount { get; set; }
+        public bool CapExceeded { get; set; }
     }
 
     /// <summary>

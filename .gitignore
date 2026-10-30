@@ -69,7 +69,7 @@ appsettings.*.local.json
 *.p12
 *.credentials
 credentials.json
-
+*.rar
 ## ---------- IDE, User-Specific & Editor State ----------
 .vs/
 .vscode/

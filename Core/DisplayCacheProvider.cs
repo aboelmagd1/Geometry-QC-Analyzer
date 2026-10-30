@@ -38,6 +38,28 @@ namespace GeometryQCAddIn.Core
                     layers = layers.Where(l => l.URI == targetLayerUri || l.Name == targetLayerUri).ToList();
                 }
 
+                // Check total selection count against MaxFeaturesToProcess cap first
+                int totalSelected = 0;
+                foreach (var layer in layers)
+                {
+                    if (!IsPolygonLayer(layer)) continue;
+                    if (IsServiceLayer(layer) && !settings.EnableForServiceLayers) continue;
+
+                    var sel = layer.GetSelection();
+                    if (sel != null)
+                    {
+                        totalSelected += (int)sel.GetCount();
+                    }
+                }
+
+                result.TotalSelectedCount = totalSelected;
+
+                if (totalSelected > settings.MaxFeaturesToProcess)
+                {
+                    result.CapExceeded = true;
+                    return;
+                }
+
                 foreach (var layer in layers)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -60,7 +82,6 @@ namespace GeometryQCAddIn.Core
                     }
 
                     long selectedInLayer = selection.GetCount();
-                    result.TotalSelectedCount += (int)selectedInLayer;
 
                     // Retrieve shapes directly from selection cursor
                     using (var cursor = selection.Search(null, false))
