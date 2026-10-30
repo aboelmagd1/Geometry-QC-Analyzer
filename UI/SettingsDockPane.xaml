@@ -37,11 +37,41 @@
                 <StackPanel Orientation="Horizontal" Margin="0,6,0,4">
                     <TextBlock Text="Max Features Cap: " Style="{DynamicResource SecondaryTextStyle}" VerticalAlignment="Center"/>
                     <TextBox Text="{Binding MaxFeaturesToProcess, UpdateSourceTrigger=PropertyChanged}" 
-                             ToolTip="Maximum number of selected features processed per run (Default: 500, Min: 1)" 
+                             ToolTip="Maximum number of selected features processed per run (Default: 500, Min: 1 - Applies to Selection modes; ignored in Entire Layer mode)" 
                              Style="{DynamicResource ThemeAwareTextBoxStyle}" Width="70" Height="22"/>
                 </StackPanel>
 
                 <CheckBox Content="Enable for Service Layers" IsChecked="{Binding EnableForServiceLayers}" Margin="0,4,0,3" Foreground="{DynamicResource PrimaryTextBrush}"/>
+
+                <TextBlock Text="Data Source Mode:" Style="{DynamicResource SecondaryTextStyle}" Margin="0,8,0,3" FontWeight="SemiBold"/>
+                <RadioButton Content="Display Cache (Selected in Viewport)" IsChecked="{Binding IsDisplayCacheMode}" 
+                             ToolTip="Analyzes selected features from in-memory screen display cache within current extent." 
+                             Margin="4,2" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                <RadioButton Content="Real Geometry (Selected Features, Ignore Viewport)" IsChecked="{Binding IsRealGeometryMode}" 
+                             ToolTip="Analyzes true unclipped geometries directly from the layer for all selected features, even outside viewport." 
+                             Margin="4,2" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                <RadioButton Content="Entire Layer (Local Layer Only, All Features)" IsChecked="{Binding IsEntireLayerMode}" 
+                             ToolTip="Analyzes all features in the selected local layer without requiring selection." 
+                             Margin="4,2" Foreground="{DynamicResource PrimaryTextBrush}"/>
+
+                <TextBlock Text="Map Display Mode:" Style="{DynamicResource SecondaryTextStyle}" Margin="0,8,0,3" FontWeight="SemiBold"/>
+                <RadioButton Content="Screen Cache Overlay (Dynamic)" IsChecked="{Binding IsScreenOverlayMode}" 
+                             ToolTip="Draws temporary in-memory overlay graphics on the active screen view." 
+                             Margin="4,2" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                <RadioButton Content="Graphics Layer in Group (Contents)" IsChecked="{Binding IsGraphicsLayerMode}" 
+                             ToolTip="Creates a Graphics Layer inside a 'QC_Geometry_Errors' Group Layer in the Map Contents pane." 
+                             Margin="4,2" Foreground="{DynamicResource PrimaryTextBrush}"/>
+
+                <StackPanel Orientation="Horizontal" Margin="4,6,0,2">
+                    <TextBlock Text="Graphics Transparency: " Style="{DynamicResource SecondaryTextStyle}" VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding MapGraphicsTransparencyPercent, UpdateSourceTrigger=PropertyChanged}" 
+                             ToolTip="Transparency level for map issue graphics (Default: 10%, Range: 0% to 90%)" 
+                             Style="{DynamicResource ThemeAwareTextBoxStyle}" Width="40" Height="22"/>
+                    <TextBlock Text=" %" Style="{DynamicResource SecondaryTextStyle}" VerticalAlignment="Center"/>
+                    <Slider Value="{Binding MapGraphicsTransparencyPercent, UpdateSourceTrigger=PropertyChanged}" 
+                            Minimum="0" Maximum="90" SmallChange="5" LargeChange="10" 
+                            Width="90" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
 
                 <Separator Margin="0,12" Background="{DynamicResource BorderBrush}"/>
 

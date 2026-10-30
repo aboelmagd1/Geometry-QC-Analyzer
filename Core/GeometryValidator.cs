@@ -71,13 +71,35 @@ namespace GeometryQCAddIn.Core
                 return result;
             }
 
+            SpatialReference? mapSr = null;
+            await QueuedTask.Run(() =>
+            {
+                mapSr = mapView.Map?.SpatialReference;
+            });
+
+            if (mapSr == null || !mapSr.IsProjected)
+            {
+                stats.EndTime = DateTime.Now;
+                result.Succeeded = false;
+                string csName = mapSr?.Name ?? "Unknown";
+                string csType = mapSr?.IsGeographic == true ? "Geographic (Degrees)" : "Unprojected / None";
+                result.Message = $"Map Coordinate System must be Projected (PCS). Current: {csName} ({csType}). Please project the map in Map Properties.";
+                LoggingService.Warning(result.Message);
+                return result;
+            }
+
             try
             {
                 progressService?.Report(5.0, "Acquiring selected polygon features...");
                 var swAcquisition = Stopwatch.StartNew();
 
-                // Step 1: Data Acquisition via Display Cache Provider
-                GeometryDataProvider provider = new DisplayCacheProvider();
+                // Step 1: Data Acquisition based on configured DataSource Mode
+                GeometryDataProvider provider = settings.DataSource switch
+                {
+                    DataSourceMode.RealGeometry => new RealGeometryProvider(),
+                    DataSourceMode.EntireLayer => new EntireLayerProvider(),
+                    _ => new DisplayCacheProvider()
+                };
                 var acqResult = await provider.AcquireFeaturesAsync(mapView, settings, targetLayerUri, cancellationToken);
                 swAcquisition.Stop();
                 stats.GeometryAcquisitionTime = swAcquisition.Elapsed;
@@ -88,8 +110,8 @@ namespace GeometryQCAddIn.Core
                     LoggingService.Warning(warn);
                 }
 
-                // Check selection cap
-                if (acqResult.CapExceeded)
+                // Check selection cap (applies to selection-based modes; ignored in Entire Layer mode)
+                if (settings.DataSource != DataSourceMode.EntireLayer && acqResult.CapExceeded)
                 {
                     stats.EndTime = DateTime.Now;
                     result.Succeeded = false;
@@ -104,9 +126,24 @@ namespace GeometryQCAddIn.Core
                     stats.EndTime = DateTime.Now;
                     result.Succeeded = true;
                     result.NothingSelected = true;
-                    result.Message = acqResult.TotalSelectedCount == 0
-                        ? "No polygon features selected. Please select one or more polygon features and run QC."
-                        : "Selected polygon features are outside current map view extent.";
+                    if (settings.DataSource == DataSourceMode.EntireLayer)
+                    {
+                        result.Message = acqResult.Warnings.Count > 0
+                            ? acqResult.Warnings[0]
+                            : "The selected layer contains no polygon features to analyze.";
+                    }
+                    else if (settings.DataSource == DataSourceMode.RealGeometry)
+                    {
+                        result.Message = acqResult.TotalSelectedCount == 0
+                            ? "No polygon features selected. Please select one or more polygon features and run QC."
+                            : "Selected features had empty or unreadable geometry in the data source.";
+                    }
+                    else
+                    {
+                        result.Message = acqResult.TotalSelectedCount == 0
+                            ? "No polygon features selected. Please select one or more polygon features and run QC."
+                            : "Selected polygon features are outside current map view extent.";
+                    }
                     LoggingService.Info(result.Message);
                     return result;
                 }

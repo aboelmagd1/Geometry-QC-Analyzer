@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Media;
+using ArcGIS.Core.Geometry;
 using ArcGIS.Desktop.Framework;
 using ArcGIS.Desktop.Framework.Contracts;
 using ArcGIS.Desktop.Framework.Threading.Tasks;
@@ -96,19 +97,85 @@ namespace GeometryQCAddIn.UI
             {
                 if (SetProperty(ref _selectedLayer, value))
                 {
-                    // Persist target layer selection into GeometryQCModule per project
-                    if (value == null || value.IsAll)
+                    // Only update persisted target layer selection when explicitly set to a valid non-null item
+                    if (value != null)
                     {
-                        GeometryQCModule.Current.PersistedTargetLayerUri = null;
-                        GeometryQCModule.Current.PersistedTargetLayerName = null;
+                        if (value.IsAll)
+                        {
+                            GeometryQCModule.Current.PersistedTargetLayerUri = null;
+                            GeometryQCModule.Current.PersistedTargetLayerName = null;
+                        }
+                        else
+                        {
+                            GeometryQCModule.Current.PersistedTargetLayerUri = value.Uri;
+                            GeometryQCModule.Current.PersistedTargetLayerName = value.DisplayName;
+                        }
                     }
-                    else
-                    {
-                        GeometryQCModule.Current.PersistedTargetLayerUri = value.Uri;
-                        GeometryQCModule.Current.PersistedTargetLayerName = value.DisplayName;
-                    }
+
+                    NotifyPropertyChanged(nameof(LayerSelectionWarningText));
+                    NotifyPropertyChanged(nameof(HasLayerSelectionWarning));
                 }
             }
+        }
+
+        public string CurrentModeDescription
+        {
+            get
+            {
+                return GeometryQCSettings.Instance.DataSource switch
+                {
+                    DataSourceMode.DisplayCache => "Display Cache (Selection in Viewport)",
+                    DataSourceMode.RealGeometry => "Real Geometry (All Selected, Ignore Viewport)",
+                    DataSourceMode.EntireLayer => "Entire Layer (Local Layer Only)",
+                    _ => "Display Cache"
+                };
+            }
+        }
+
+        public bool IsEntireLayerSelected => GeometryQCSettings.Instance.DataSource == DataSourceMode.EntireLayer;
+
+        public string? LayerSelectionWarningText
+        {
+            get
+            {
+                if (IsEntireLayerSelected)
+                {
+                    if (SelectedLayer == null || SelectedLayer.IsAll)
+                    {
+                        return "⚠️ Entire Layer mode requires selecting a specific local polygon layer.";
+                    }
+                    if (!SelectedLayer.IsLocal)
+                    {
+                        return "⚠️ Selected layer is a Service layer. Entire Layer requires a local layer.";
+                    }
+                }
+                return null;
+            }
+        }
+
+        public bool HasLayerSelectionWarning => !string.IsNullOrEmpty(LayerSelectionWarningText);
+
+        private string? _coordinateSystemWarningText;
+        public string? CoordinateSystemWarningText
+        {
+            get => _coordinateSystemWarningText;
+            private set
+            {
+                if (SetProperty(ref _coordinateSystemWarningText, value))
+                {
+                    NotifyPropertyChanged(nameof(HasCoordinateSystemWarning));
+                }
+            }
+        }
+
+        public bool HasCoordinateSystemWarning => !string.IsNullOrEmpty(CoordinateSystemWarningText);
+
+        public void NotifyModeChanged()
+        {
+            NotifyPropertyChanged(nameof(CurrentModeDescription));
+            NotifyPropertyChanged(nameof(IsEntireLayerSelected));
+            NotifyPropertyChanged(nameof(LayerSelectionWarningText));
+            NotifyPropertyChanged(nameof(HasLayerSelectionWarning));
         }
 
         private ObservableCollection<IssueGroupViewModel> _issueGroups = new ObservableCollection<IssueGroupViewModel>();
@@ -253,8 +320,10 @@ namespace GeometryQCAddIn.UI
             var pane = FrameworkApplication.DockPaneManager.Find(DockPaneId);
             if (pane is ResultsDockPaneViewModel vm)
             {
-                vm.Activate();
-                _ = vm.RefreshLayersAsync();
+                if (!vm.IsVisible)
+                {
+                    vm.Activate();
+                }
             }
             else if (pane != null)
             {
@@ -265,11 +334,20 @@ namespace GeometryQCAddIn.UI
         public async Task RefreshLayersAsync()
         {
             var layersList = new List<MapLayerItem> { MapLayerItem.AllPolygonLayers };
+            string? csWarning = null;
 
             await QueuedTask.Run(() =>
             {
                 var mapView = MapView.Active;
                 if (mapView == null || mapView.Map == null) return;
+
+                var sr = mapView.Map.SpatialReference;
+                if (sr == null || !sr.IsProjected)
+                {
+                    string csName = sr?.Name ?? "Unknown";
+                    string csType = sr?.IsGeographic == true ? "Geographic (Degrees)" : "Unprojected / None";
+                    csWarning = $"⚠️ Map must use a Projected Coordinate System (PCS). Current: {csName} ({csType})";
+                }
 
                 var allLayers = mapView.Map.GetLayersAsFlattenedList();
                 foreach (var layer in allLayers)
@@ -293,13 +371,23 @@ namespace GeometryQCAddIn.UI
                 }
             });
 
-            AvailableLayers = new ObservableCollection<MapLayerItem>(layersList);
+            CoordinateSystemWarningText = csWarning;
 
-            // Restore target layer: first check active in-memory selection, otherwise check module persisted state
+            // 1. Capture currently selected target before modifying collection
             string? targetUri = SelectedLayer?.Uri ?? GeometryQCModule.Current?.PersistedTargetLayerUri;
             string? targetName = SelectedLayer?.DisplayName ?? GeometryQCModule.Current?.PersistedTargetLayerName;
             bool wasAll = (SelectedLayer != null && SelectedLayer.IsAll) || (targetUri == null && targetName == null);
 
+            // 2. Only rebuild collection if the layer list has actually changed
+            bool listChanged = _availableLayers.Count != layersList.Count ||
+                !_availableLayers.Select(l => l.Uri ?? l.DisplayName).SequenceEqual(layersList.Select(l => l.Uri ?? l.DisplayName));
+
+            if (listChanged)
+            {
+                AvailableLayers = new ObservableCollection<MapLayerItem>(layersList);
+            }
+
+            // 3. Restore target layer selection
             if (wasAll)
             {
                 SelectedLayer = AvailableLayers[0];
@@ -330,6 +418,55 @@ namespace GeometryQCAddIn.UI
             {
                 StatusText = "No active map view. Please open a map.";
                 return;
+            }
+
+            // Validation: Map must use a Projected Coordinate System (PCS)
+            SpatialReference? mapSr = null;
+            await QueuedTask.Run(() =>
+            {
+                mapSr = mapView.Map?.SpatialReference;
+            });
+
+            if (mapSr == null || !mapSr.IsProjected)
+            {
+                string csName = mapSr?.Name ?? "Unknown";
+                string csType = mapSr?.IsGeographic == true ? "Geographic (Degrees)" : "Unprojected / None";
+                StatusText = "Map must use a Projected Coordinate System (PCS).";
+                ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
+                    "Geometry QC requires the active map to use a Projected Coordinate System (PCS) with metric/linear units (such as UTM, State Plane, or National Grid).\n\n" +
+                    $"Current Map Coordinate System:\n• Name: {csName}\n• Type: {csType}\n\n" +
+                    "Geometric validation rules (tolerances in centimeters and areas in square meters) cannot be evaluated accurately on geographic coordinates (degrees).\n\n" +
+                    "Please open Map Properties > Coordinate Systems and choose a Projected Coordinate System before running QC.",
+                    "Projected Coordinate System Required",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+
+            // Validation for EntireLayer mode
+            if (settings.DataSource == DataSourceMode.EntireLayer)
+            {
+                if (SelectedLayer == null || SelectedLayer.IsAll || string.IsNullOrEmpty(SelectedLayer.Uri))
+                {
+                    StatusText = "Entire Layer mode requires selecting a specific local polygon layer.";
+                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
+                        "Entire Layer mode requires choosing a specific polygon layer.\n\nPlease select a target layer from the Layer dropdown before running QC.",
+                        "Target Layer Required",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (!SelectedLayer.IsLocal)
+                {
+                    StatusText = $"Layer '{SelectedLayer.DisplayName}' is a Service Layer. Entire Layer mode only supports local layers.";
+                    ArcGIS.Desktop.Framework.Dialogs.MessageBox.Show(
+                        $"The selected layer '{SelectedLayer.DisplayName}' is a Service/Web Layer.\n\nEntire Layer QC can only be executed on local data sources (e.g. File Geodatabase, Mobile Geodatabase, Shapefile, Enterprise Geodatabase).\n\nPlease select a local layer or change the Data Source Mode in Settings.",
+                        "Local Layer Required",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Warning);
+                    return;
+                }
             }
 
             IsBusy = true;

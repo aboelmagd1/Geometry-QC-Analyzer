@@ -17,6 +17,8 @@ This folder contains the complete, up-to-date AI rebuild prompts and technical s
 | [`Update_01_Specification_AR.md`](Update_01_Specification_AR.md) | العربية | تفاصيل متطلبات التحديث 01، معايير التفاوتات المساحية، سقف المعالم، وحفظ الطبقة لكل مشروع. |
 | [`Flat_Pseudo_Arc_Detection_Prompt_EN.md`](Flat_Pseudo_Arc_Detection_Prompt_EN.md) | English | Algorithmic specification and prompt for Flat / Pseudo-Arc detection using Sagitta ($h \le 0.01\text{ cm}$) and Segment Area ($A \le 10\text{ cm}^2$). |
 | [`Flat_Pseudo_Arc_Detection_Prompt_AR.md`](Flat_Pseudo_Arc_Detection_Prompt_AR.md) | العربية | المواصفات الرياضية والبرمجية لكشف الأقواس الوهمية والمنبسطة باستخدام سهم القوس ومساحة القطعة الدائرية. |
+| [`Attribute_QC_Suite_Specification_Prompt_AR.md`](Attribute_QC_Suite_Specification_Prompt_AR.md) | العربية | المواصفات المعمارية وبرومت تنفيذ منظومة فحص البيانات الوصفية (Attribute QC Suite)، القواعد الحقلية الـ 6 المعتمدة، وسرعة الـ Feature Services، والربط مع جداول GDB وملفات Excel غير المقفلة مع طبقة الأخطاء المستقلة. |
+| [`Attribute_QC_Suite_Specification_Prompt_EN.md`](Attribute_QC_Suite_Specification_Prompt_EN.md) | English | Comprehensive architectural specification and developer prompt for Attribute QC Suite, the 6 target field rules, zero-geometry speed for Feature Services, non-locking Excel comparisons, and isolated error layer generation. |
 
 ---
 

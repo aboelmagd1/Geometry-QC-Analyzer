@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using ArcGIS.Core.CIM;
 using ArcGIS.Desktop.Mapping;
@@ -6,6 +7,7 @@ namespace GeometryQCAddIn.Graphics
 {
     /// <summary>
     /// Central provider for high-visibility, theme-compatible CIM symbols corresponding to each QC check.
+    /// Supports user-configurable transparency levels across all shape elements, including fills, lines, and strokes.
     /// Follows the color specifications:
     /// - Invalid Geometry: Purple
     /// - Overlap: Red
@@ -17,89 +19,102 @@ namespace GeometryQCAddIn.Graphics
     /// - Snap Issue: Deep Blue
     /// - Redundant Vertex: Gray
     /// - Missing Junction: Magenta
+    /// - Flat Pseudo-Arc: Teal
     /// </summary>
     public static class QCGraphicSymbolProvider
     {
-        public static CIMSymbol? GetSymbolForIssue(string checkId, string issueType)
+        /// <summary>
+        /// Creates a CIMColor with opacity scaled by the user's transparency setting.
+        /// In ArcGIS Pro SDK, CIMColor alpha is defined as an opacity percentage from 0.0 (transparent) to 100.0 (opaque).
+        /// </summary>
+        private static CIMColor GetColor(int r, int g, int b, double baseOpacityPercent, double transparencyPercent)
+        {
+            // transparency: 0% = fully opaque (factor 1.0), 10% = default (factor 0.90), up to 90%
+            double factor = Math.Clamp(1.0 - (transparencyPercent / 100.0), 0.05, 1.0);
+            double effectiveAlpha = Math.Clamp(baseOpacityPercent * factor, 5.0, 100.0);
+            return CIMColor.CreateRGBColor(r, g, b, effectiveAlpha);
+        }
+
+        public static CIMSymbol? GetSymbolForIssue(string checkId, string issueType, double transparencyPercent = 10.0)
         {
             switch (checkId)
             {
                 case "CHK_INVALID_GEOM":
-                    // Purple point / polygon outline
+                    // Purple point cross / polygon outline
                     return SymbolFactory.Instance.ConstructPointSymbol(
-                        CIMColor.CreateRGBColor(160, 32, 240), 10.0, SimpleMarkerStyle.Cross);
+                        GetColor(160, 32, 240, 100.0, transparencyPercent), 10.0, SimpleMarkerStyle.Cross);
 
                 case "CHK_OVERLAP":
-                    // Semi-transparent red fill with bright red outline
-                    var redFill = CIMColor.CreateRGBColor(255, 0, 0, 100);
+                    // Semi-transparent red fill with matching transparent bright red outline
+                    var redFill = GetColor(255, 0, 0, 40.0, transparencyPercent);
                     var redOutline = SymbolFactory.Instance.ConstructStroke(
-                        CIMColor.CreateRGBColor(255, 0, 0), 2.0, SimpleLineStyle.Solid);
+                        GetColor(255, 0, 0, 100.0, transparencyPercent), 2.0, SimpleLineStyle.Solid);
                     return SymbolFactory.Instance.ConstructPolygonSymbol(redFill, SimpleFillStyle.Solid, redOutline);
 
                 case "CHK_DUPLICATE":
                     // Dark red / Maroon hatched polygon
-                    var darkRed = CIMColor.CreateRGBColor(139, 0, 0);
-                    var darkRedOutline = SymbolFactory.Instance.ConstructStroke(darkRed, 2.5, SimpleLineStyle.Solid);
+                    var darkRedOutline = SymbolFactory.Instance.ConstructStroke(
+                        GetColor(139, 0, 0, 100.0, transparencyPercent), 2.5, SimpleLineStyle.Solid);
                     return SymbolFactory.Instance.ConstructPolygonSymbol(
-                        CIMColor.CreateRGBColor(139, 0, 0, 80), SimpleFillStyle.DiagonalCross, darkRedOutline);
+                        GetColor(139, 0, 0, 35.0, transparencyPercent), SimpleFillStyle.DiagonalCross, darkRedOutline);
 
                 case "CHK_GAP":
-                    // Bright yellow / amber polygon fill
-                    var yellowFill = CIMColor.CreateRGBColor(255, 215, 0, 150);
+                    // Yellow / amber polygon fill with amber outline
+                    var yellowFill = GetColor(255, 215, 0, 50.0, transparencyPercent);
                     var yellowOutline = SymbolFactory.Instance.ConstructStroke(
-                        CIMColor.CreateRGBColor(255, 165, 0), 2.0, SimpleLineStyle.Solid);
+                        GetColor(255, 165, 0, 100.0, transparencyPercent), 2.0, SimpleLineStyle.Solid);
                     return SymbolFactory.Instance.ConstructPolygonSymbol(yellowFill, SimpleFillStyle.Solid, yellowOutline);
 
                 case "CHK_MULTIPART":
                     // Orange diamond point symbol
                     return SymbolFactory.Instance.ConstructPointSymbol(
-                        CIMColor.CreateRGBColor(255, 140, 0), 10.0, SimpleMarkerStyle.Diamond);
+                        GetColor(255, 140, 0, 100.0, transparencyPercent), 10.0, SimpleMarkerStyle.Diamond);
 
                 case "CHK_SHORT_SEG":
                     // Vivid Blue line symbol
                     return SymbolFactory.Instance.ConstructLineSymbol(
-                        CIMColor.CreateRGBColor(0, 120, 255), 3.0, SimpleLineStyle.Solid);
+                        GetColor(0, 120, 255, 100.0, transparencyPercent), 3.0, SimpleLineStyle.Solid);
 
                 case "CHK_ANGLE":
                     // Cyan triangle point symbol
                     return SymbolFactory.Instance.ConstructPointSymbol(
-                        CIMColor.CreateRGBColor(0, 220, 220), 9.0, SimpleMarkerStyle.Triangle);
+                        GetColor(0, 220, 220, 100.0, transparencyPercent), 9.0, SimpleMarkerStyle.Triangle);
 
                 case "CHK_SNAP":
                     // Blue circle point symbol with white border
                     return SymbolFactory.Instance.ConstructPointSymbol(
-                        CIMColor.CreateRGBColor(30, 144, 255), 8.0, SimpleMarkerStyle.Circle);
+                        GetColor(30, 144, 255, 100.0, transparencyPercent), 8.0, SimpleMarkerStyle.Circle);
 
                 case "CHK_REDUNDANT":
                     // Gray square point symbol
                     return SymbolFactory.Instance.ConstructPointSymbol(
-                        CIMColor.CreateRGBColor(128, 128, 128), 7.0, SimpleMarkerStyle.Square);
+                        GetColor(128, 128, 128, 100.0, transparencyPercent), 7.0, SimpleMarkerStyle.Square);
 
                 case "CHK_REDUNDANT_ARCLINE":
-                    // Warning Coral triangle point symbol (distinct from Gray redundant square)
+                    // Warning Coral triangle point symbol
                     return SymbolFactory.Instance.ConstructPointSymbol(
-                        CIMColor.CreateRGBColor(255, 127, 80), 9.0, SimpleMarkerStyle.Triangle);
+                        GetColor(255, 127, 80, 100.0, transparencyPercent), 9.0, SimpleMarkerStyle.Triangle);
 
                 case "CHK_JUNCTION":
                     // Magenta star / cross point symbol
                     return SymbolFactory.Instance.ConstructPointSymbol(
-                        CIMColor.CreateRGBColor(255, 0, 255), 11.0, SimpleMarkerStyle.X);
+                        GetColor(255, 0, 255, 100.0, transparencyPercent), 11.0, SimpleMarkerStyle.X);
 
                 case "CHK_FLAT_PSEUDO_ARC":
                     // Warning Teal dashed line symbol for flat pseudo-arcs
                     return SymbolFactory.Instance.ConstructLineSymbol(
-                        CIMColor.CreateRGBColor(0, 206, 209), 3.0, SimpleLineStyle.Dash);
+                        GetColor(0, 206, 209, 100.0, transparencyPercent), 3.0, SimpleLineStyle.Dash);
 
                 default:
                     return SymbolFactory.Instance.ConstructPointSymbol(
-                        CIMColor.CreateRGBColor(255, 69, 0), 8.0, SimpleMarkerStyle.Circle);
+                        GetColor(255, 69, 0, 100.0, transparencyPercent), 8.0, SimpleMarkerStyle.Circle);
             }
         }
 
         public static CIMSymbol? GetHighlightSymbol()
         {
             return SymbolFactory.Instance.ConstructPointSymbol(
-                CIMColor.CreateRGBColor(255, 255, 0), 14.0, SimpleMarkerStyle.Circle);
+                CIMColor.CreateRGBColor(255, 255, 0, 100.0), 14.0, SimpleMarkerStyle.Circle);
         }
     }
 }

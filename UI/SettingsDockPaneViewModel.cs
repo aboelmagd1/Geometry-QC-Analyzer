@@ -56,6 +56,112 @@ namespace GeometryQCAddIn.UI
             }
         }
 
+        public bool IsDisplayCacheMode
+        {
+            get => _settings.DataSource == DataSourceMode.DisplayCache;
+            set
+            {
+                if (value && _settings.DataSource != DataSourceMode.DisplayCache)
+                {
+                    _settings.DataSource = DataSourceMode.DisplayCache;
+                    NotifyDataSourceProperties();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public bool IsRealGeometryMode
+        {
+            get => _settings.DataSource == DataSourceMode.RealGeometry;
+            set
+            {
+                if (value && _settings.DataSource != DataSourceMode.RealGeometry)
+                {
+                    _settings.DataSource = DataSourceMode.RealGeometry;
+                    NotifyDataSourceProperties();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public bool IsEntireLayerMode
+        {
+            get => _settings.DataSource == DataSourceMode.EntireLayer;
+            set
+            {
+                if (value && _settings.DataSource != DataSourceMode.EntireLayer)
+                {
+                    _settings.DataSource = DataSourceMode.EntireLayer;
+                    NotifyDataSourceProperties();
+                    SaveSettings();
+                }
+            }
+        }
+
+        private void NotifyDataSourceProperties()
+        {
+            NotifyPropertyChanged(nameof(IsDisplayCacheMode));
+            NotifyPropertyChanged(nameof(IsRealGeometryMode));
+            NotifyPropertyChanged(nameof(IsEntireLayerMode));
+
+            var resultsVm = ArcGIS.Desktop.Framework.FrameworkApplication.DockPaneManager?.Find(ResultsDockPaneViewModel.DockPaneId) as ResultsDockPaneViewModel;
+            resultsVm?.NotifyModeChanged();
+        }
+
+        public bool IsScreenOverlayMode
+        {
+            get => _settings.GraphicsDisplayMode == MapGraphicsDisplayMode.ScreenOverlay;
+            set
+            {
+                if (value && _settings.GraphicsDisplayMode != MapGraphicsDisplayMode.ScreenOverlay)
+                {
+                    _settings.GraphicsDisplayMode = MapGraphicsDisplayMode.ScreenOverlay;
+                    NotifyPropertyChanged();
+                    NotifyPropertyChanged(nameof(IsGraphicsLayerMode));
+                    SaveSettings();
+                    RefreshMapGraphics();
+                }
+            }
+        }
+
+        public bool IsGraphicsLayerMode
+        {
+            get => _settings.GraphicsDisplayMode == MapGraphicsDisplayMode.GraphicsLayer;
+            set
+            {
+                if (value && _settings.GraphicsDisplayMode != MapGraphicsDisplayMode.GraphicsLayer)
+                {
+                    _settings.GraphicsDisplayMode = MapGraphicsDisplayMode.GraphicsLayer;
+                    NotifyPropertyChanged();
+                    NotifyPropertyChanged(nameof(IsScreenOverlayMode));
+                    SaveSettings();
+                    RefreshMapGraphics();
+                }
+            }
+        }
+
+        public double MapGraphicsTransparencyPercent
+        {
+            get => _settings.MapGraphicsTransparencyPercent;
+            set
+            {
+                double val = Math.Clamp(Math.Round(value, 0), 0.0, 90.0);
+                if (Math.Abs(_settings.MapGraphicsTransparencyPercent - val) > 0.1)
+                {
+                    _settings.MapGraphicsTransparencyPercent = val;
+                    NotifyPropertyChanged();
+                    SaveSettings();
+                    RefreshMapGraphics();
+                }
+            }
+        }
+
+        private void RefreshMapGraphics()
+        {
+            var resultsVm = FrameworkApplication.DockPaneManager.Find(ResultsDockPaneViewModel.DockPaneId) as ResultsDockPaneViewModel;
+            resultsVm?.RefreshMapGraphics();
+        }
+
         // Checks toggles
         public bool CheckInvalidGeometry
         {
@@ -234,6 +340,8 @@ namespace GeometryQCAddIn.UI
             _settings.IsEnabled = true;
             _settings.EnableForServiceLayers = false;
             _settings.MaxFeaturesToProcess = 500;
+            _settings.GraphicsDisplayMode = MapGraphicsDisplayMode.ScreenOverlay;
+            _settings.MapGraphicsTransparencyPercent = 10.0; // Default 10% transparency
 
             _settings.CheckInvalidGeometry = true;
             _settings.CheckOverlaps = true;

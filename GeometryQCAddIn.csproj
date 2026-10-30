@@ -47,6 +47,10 @@
       <HintPath>$(ArcGISProDir)\ArcGIS.Desktop.Resources.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="ArcGIS.Desktop.Layouts">
+      <HintPath>$(ArcGISProDir)\Extensions\Layout\ArcGIS.Desktop.Layouts.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>

@@ -5,6 +5,19 @@ using System.Text.Json.Serialization;
 
 namespace GeometryQCAddIn.Config
 {
+    public enum DataSourceMode
+    {
+        DisplayCache = 0, // Selection in Viewport (Default)
+        RealGeometry = 1, // All Selected, Ignore Viewport (Fetches true geometries from FeatureClass)
+        EntireLayer = 2   // Entire Layer (Local Layer Only, All Features)
+    }
+
+    public enum MapGraphicsDisplayMode
+    {
+        ScreenOverlay = 0, // In-memory dynamic screen cache overlay (Default)
+        GraphicsLayer = 1  // Graphics Layer inside a Group Layer in Map Contents
+    }
+
     /// <summary>
     /// User configurable settings for Geometry QC analyzer.
     /// Supports JSON serialization and persistence in the user profile.
@@ -13,8 +26,11 @@ namespace GeometryQCAddIn.Config
     {
         // General
         public bool IsEnabled { get; set; } = true;
+        public DataSourceMode DataSource { get; set; } = DataSourceMode.DisplayCache;
         public bool EnableForServiceLayers { get; set; } = false;
         public int MaxFeaturesToProcess { get; set; } = 500;
+        public MapGraphicsDisplayMode GraphicsDisplayMode { get; set; } = MapGraphicsDisplayMode.ScreenOverlay;
+        public double MapGraphicsTransparencyPercent { get; set; } = 10.0; // Default: 10% transparency (0% = opaque, 90% = max transparent)
 
         // 1. Invalid Geometry
         public bool CheckInvalidGeometry { get; set; } = true;
@@ -97,6 +113,10 @@ namespace GeometryQCAddIn.Config
                         if (settings.FlatArcAreaToleranceCm2 <= 0)
                         {
                             settings.FlatArcAreaToleranceCm2 = 10.0;
+                        }
+                        if (settings.MapGraphicsTransparencyPercent < 0 || settings.MapGraphicsTransparencyPercent > 90)
+                        {
+                            settings.MapGraphicsTransparencyPercent = 10.0;
                         }
                         // Self-healing clamp: if tolerance was accidentally set below 1.0 cm, restore to 10.0 cm
                         if (settings.MissingJunctionToleranceCm < 1.0)

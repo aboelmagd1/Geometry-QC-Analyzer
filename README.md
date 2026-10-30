@@ -32,7 +32,7 @@
 * **💾 Per-Project Target Layer Persistence:** Remembers chosen target layers (including "All Polygon Layers") per ArcGIS Pro project, restoring them automatically upon reopening.
 * **✅ Clear "No errors found ✓" Status:** Distinguishes verified zero-error runs with clear feedback while keeping analyzed feature counts and execution times visible.
 * **🧭 Interactive Results DockPane:** Categorized issue tree with categorized counts ("3 errors · 2 warnings") and instant **Zoom** to any issue.
-* **🎨 Color-Coded Map Overlays:** High-visibility graphics for detected errors, with an option to toggle warning-level markers on/off.
+* **🎨 Dual Map Display Modes:** Choose between fast dynamic screen cache overlays or a persistent Graphics Layer inside a `QC_Geometry_Errors` Group Layer in the Map Contents pane, with an option to toggle warning markers on/off.
 * **💾 Geodatabase Error Export (Export to GDB):** One-click export of all detected issues into a dedicated `QC_Errors` Feature Dataset inside the project's Default Geodatabase, categorized by error geometry type with complete audit metadata.
 * **📐 Sub-Millimeter Measurement Precision:** Formats distances below 1 cm in millimeters (`mm`) down to sub-millimeter fractions (e.g., `0.35 mm`), preventing misleading `0.00 cm` labels.
 * **🛡️ Curve-Aware Analysis & Arc–Line Warning Option:** Validates parametric curves (Circular Arcs & Cubic Béziers) and protects boundary nodes via **Junction Guard**. Includes an optional sub-check for near-tangent arc–line collinear junctions.
@@ -103,7 +103,7 @@ For full mathematical equations and cadastral rationale, see [QC_CHECKS_LOGIC.md
 * **💾 حفظ اختيار الطبقة لكل مشروع (Per-Project Persistence):** حفظ الطبقة المختارة (بما في ذلك "All Polygon Layers") داخل ملف مشروع ArcGIS Pro واستعادتها تلقائياً عند إعادة فتح المشروع دون رسائل تنبيهية مزعجة.
 * **✅ إشعار واضح عند خلو البيانات من الأخطاء ("No errors found ✓"):** إظهار رسالة واضحة تؤكد نجاح الفحص وعدم وجود أخطاء مع بقاء عدد المعالم التي تم فحصها وزمن التحليل ظاهراً.
 * **🧭 لوحة نتائج تفاعلية:** شجرة تصنيفية للأخطاء مع تصنيف إجمالي المشاكل ("3 errors · 2 warnings") وزر **Zoom** للانتقال الفوري وتكبير موقع كل عيب على الخريطة.
-* **🎨 رسومات توضيحية ملونة:** تمييز بصري فوق الخريطة بألوان مميزة لكل نوع خطأ مع خيار إظهار أو إخفاء رسومات التحذيرات (Warnings) على الخريطة.
+* **🎨 خياران لعرض الرسومات على الخريطة:** إمكانية الاختيار بين كاش العرض المؤقت على الشاشة (Screen Cache Overlay) أو إنشاء طبقة رسومات (Graphics Layer) داخل Group Layer باسم `QC_Geometry_Errors` في محتويات الخريطة، مع خيار إظهار أو إخفاء رسومات التحذيرات (Warnings).
 * **💾 تصدير الأخطاء لقاعدة بيانات جغرافية (Export to GDB):** إمكانية تصدير كافة الأخطاء المكتشفة بضغطة زر إلى Feature Dataset مستقل باسم `QC_Errors` داخل الـ Default Geodatabase للمشروع، مقسمة إلى Feature Classes بحسب نوع وشكل الخطأ مع كامل البيانات الوصفية وإضافتها للخريطة تلقائياً.
 * **📐 دقة فائقة تحت الملليمتر:** قياس المسافات الأقل من 1 سنتيمتر بوحدة الملليمتر (`mm`) بدقة حتى 3 و4 خانات عشرية (مثل `0.35 mm`) لمنع الرسائل الوهمية `0.00 cm`.
 * **🛡️ حماية نقاط الربط (Junction Guard) وتدقيق نقاط التماس بين الأقواس والخطوط:** تمييز ذكي بين النقاط الزائدة على الاستقامة ونقاط التقاء المضلعات المجاورة، مع خيار تدقيق إضافي تحذيري لنقاط التماس بين المنحنيات والخطوط المستقيمة (Arc–Line Junctions).
